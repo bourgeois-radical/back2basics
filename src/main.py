@@ -44,14 +44,20 @@ np.random.seed(42)
 
 from utils import print_section_header, set_plot_style
 from demonstrations import (
+    # Part 1: Regression
     demonstration_1_three_distributions,
     demonstration_2_mle_to_mse,
     demonstration_3_mle_to_mae,
     demonstration_4_mse_vs_mae_outliers,
     demonstration_5_model_misspecification,
     demonstration_6_real_world_example,
+    # Part 2: Classification
     demonstration_7_classification_imbalance,
     demonstration_8_bias_variance_residuals,
+    demonstration_9_bernoulli_to_crossentropy,
+    demonstration_10_alternative_classification_losses,
+    demonstration_11_imbalance_and_metrics,
+    # Summary
     demonstration_summary,
 )
 
@@ -273,7 +279,7 @@ def section_5():
     SECTION 5 (BONUS): Bias-Variance in Residuals (~if time permits)
     =================================================================
 
-    SPEAKER NOTE: Only cover this if you have extra time!
+    SPEAKER NOTE: Only cover this if you have extra time in Part 1!
 
     This is more theoretical but connects everything together.
 
@@ -297,6 +303,112 @@ def section_5():
     demonstration_8_bias_variance_residuals()
 
 
+# =============================================================================
+# PART 2: CLASSIFICATION
+# =============================================================================
+
+
+def section_6():
+    """
+    SECTION 6: From Bernoulli to Cross-Entropy (~7 minutes)
+    ========================================================
+
+    SPEAKER NOTE: This parallels the MSE derivation but for classification.
+
+    Key points:
+    1. For binary outcomes, Bernoulli is the natural distribution
+    2. The same MLE framework applies:
+       - Bernoulli likelihood -> log-likelihood -> negative log-likelihood
+       - Result: Cross-entropy loss!
+    3. This is WHY we use cross-entropy for classification
+
+    The pattern is universal:
+    - Regression: Gaussian -> MSE, Laplace -> MAE
+    - Classification: Bernoulli -> Cross-Entropy
+
+    Also show:
+    - Calibration as the "residual check" for classification
+    - Points on diagonal = good calibration = Bernoulli assumption is valid
+    """
+    print("\n" + "=" * 70)
+    print("  PART 2: CLASSIFICATION")
+    print("  Applying the same MLE framework to binary outcomes")
+    print("=" * 70 + "\n")
+    demonstration_9_bernoulli_to_crossentropy()
+
+
+def section_7():
+    """
+    SECTION 7: Alternative Classification Distributions (~3 minutes)
+    =================================================================
+
+    SPEAKER NOTE: Quick overview - not deep dive.
+
+    Main message: Bernoulli works 90%+ of the time, but alternatives exist.
+
+    Cover briefly:
+    1. Probit: Latent Gaussian variable interpretation
+    2. Complementary log-log: For rare events (asymmetric)
+    3. Hinge loss (SVM): Non-probabilistic, max-margin approach
+
+    Show link function comparison:
+    - Logistic (sigmoid): symmetric S-curve
+    - Probit: very similar to logistic
+    - Cloglog: asymmetric, different behavior in tails
+
+    Practical advice:
+    - Start with cross-entropy
+    - Check calibration
+    - If poor calibration, consider alternatives
+    """
+    demonstration_10_alternative_classification_losses()
+
+
+def section_8():
+    """
+    SECTION 8: Class Imbalance and Metrics (~5 minutes)
+    ====================================================
+
+    SPEAKER NOTE: This is the PAYOFF - connects everything together.
+
+    The problem:
+    - Standard MLE weights by sample count
+    - With 95% negative, loss is dominated by negative class
+    - Model learns to predict negative always -> 95% accuracy!
+
+    The MLE connection (make this explicit):
+    - Cross-entropy: L = -sum[y*log(p) + (1-y)*log(1-p)]
+    - With 950 negatives and 50 positives:
+      - 950 terms contribute to (1-y)*log(1-p)
+      - Only 50 terms contribute to y*log(p)
+    - Gradient is 19x more influenced by negatives!
+
+    Metric sensitivity (critical concept):
+    - SENSITIVE to imbalance: Accuracy, Precision
+    - NOT SENSITIVE: Recall, AUC-ROC, Average Precision
+
+    Rule of thumb:
+    - If denominator includes majority class -> sensitive
+    - If only looks at minority class -> not sensitive
+
+    Solution:
+    - Weight the loss function (class_weight='balanced')
+    - Minority class weighted proportionally higher
+    - Now both classes contribute equally to loss
+    """
+    demonstration_11_imbalance_and_metrics()
+
+
+def section_4_legacy():
+    """
+    LEGACY: Original imbalance section.
+
+    SPEAKER NOTE: This is a shorter version. Use section_8 for the full
+    treatment with better MLE connection and metric sensitivity analysis.
+    """
+    demonstration_7_classification_imbalance(imbalance_ratio=0.05)
+
+
 def section_summary():
     """
     SECTION 6: Summary and Takeaways (~2 minutes)
@@ -316,30 +428,41 @@ def section_summary():
     demonstration_summary()
 
 
-def run_presentation(sections=None, interactive=False):
+def run_presentation(sections=None, interactive=False, include_classification=True):
     """
     Run the full presentation or specific sections.
 
     Parameters
     ----------
     sections : list of int, optional
-        Which sections to run (1-6). If None, run all.
+        Which sections to run (1-9). If None, run all.
     interactive : bool
         If True, pause after each section for discussion.
+    include_classification : bool
+        If True (default), include Part 2: Classification sections.
     """
     setup_presentation()
 
     all_sections = {
-        1: ("The Three Distributions", section_1),
+        # Part 1: Regression
+        1: ("PART 1: The Three Distributions", section_1),
         2: ("MLE to MSE and MAE", lambda: (section_2a(), section_2b())),
         3: ("Loss Functions in Action", lambda: (section_3a(), section_3b(), section_3c())),
-        4: ("Imbalanced Classification", section_4),
-        5: ("Bias-Variance (Bonus)", section_5),
-        6: ("Summary", section_summary),
+        4: ("Bias-Variance (Bonus)", section_5),
+        # Part 2: Classification
+        5: ("PART 2: Bernoulli to Cross-Entropy", section_6),
+        6: ("Alternative Classification Losses", section_7),
+        7: ("Class Imbalance and Metrics", section_8),
+        # Summary
+        8: ("Summary", section_summary),
     }
 
     if sections is None:
-        sections = list(all_sections.keys())
+        if include_classification:
+            sections = list(all_sections.keys())
+        else:
+            # Only Part 1 and Summary
+            sections = [1, 2, 3, 4, 8]
 
     for section_num in sections:
         if section_num not in all_sections:
@@ -369,29 +492,36 @@ def main():
     SPEAKER NOTE: You can run specific sections for practice:
         python main.py --section 1 2
         python main.py --interactive
+        python main.py --regression-only  # Skip classification section
     """
     parser = argparse.ArgumentParser(
         description="MLE and Loss Functions Presentation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    python main.py              # Run full presentation
-    python main.py --section 1  # Run section 1 only
-    python main.py --section 1 2 3  # Run sections 1, 2, and 3
-    python main.py --interactive    # Pause after each section
-    python main.py --list       # List all sections
+    python main.py                   # Run full presentation (regression + classification)
+    python main.py --regression-only # Only Part 1: Regression
+    python main.py --section 1       # Run section 1 only
+    python main.py --section 5 6 7   # Run classification sections only
+    python main.py --interactive     # Pause after each section
+    python main.py --list            # List all sections
         """,
     )
     parser.add_argument(
         "--section", "-s",
         type=int,
         nargs="+",
-        help="Which sections to run (1-6)",
+        help="Which sections to run (1-8)",
     )
     parser.add_argument(
         "--interactive", "-i",
         action="store_true",
         help="Interactive mode: pause after each section",
+    )
+    parser.add_argument(
+        "--regression-only", "-r",
+        action="store_true",
+        help="Only run Part 1: Regression (skip classification)",
     )
     parser.add_argument(
         "--list", "-l",
@@ -403,21 +533,42 @@ Examples:
 
     if args.list:
         print("\nAvailable sections:")
-        print("-" * 50)
+        print("=" * 60)
+        print()
+        print("PART 1: REGRESSION (~20 min)")
+        print("-" * 60)
         print("1. The Three Distributions (~8 min)")
+        print("   - Input, function, and residual distributions")
         print("2. MLE to MSE and MAE (~10 min)")
-        print("3. Loss Functions in Action (~12 min)")
-        print("   3a. MSE vs MAE with Outliers")
-        print("   3b. Model Misspecification")
-        print("   3c. Real World Example")
-        print("4. Imbalanced Classification (~6 min)")
-        print("5. Bias-Variance in Residuals (Bonus)")
-        print("6. Summary (~2 min)")
-        print("-" * 50)
-        print("\nTotal: ~40 minutes")
+        print("   - Gaussian -> MSE, Laplace -> MAE derivations")
+        print("3. Loss Functions in Action (~10 min)")
+        print("   - MSE vs MAE with outliers")
+        print("   - Model misspecification")
+        print("   - Real world example (California Housing)")
+        print("4. Bias-Variance in Residuals (Bonus)")
+        print()
+        print("PART 2: CLASSIFICATION (~18 min)")
+        print("-" * 60)
+        print("5. Bernoulli to Cross-Entropy (~7 min)")
+        print("   - Same MLE framework applied to classification")
+        print("6. Alternative Classification Losses (~3 min)")
+        print("   - Probit, complementary log-log, hinge loss")
+        print("7. Class Imbalance and Metrics (~5 min)")
+        print("   - Why accuracy fails, which metrics are robust")
+        print()
+        print("8. Summary (~2 min)")
+        print()
+        print("=" * 60)
+        print("Total: ~40 minutes (with both parts)")
+        print("       ~20 minutes (regression only)")
         return
 
-    run_presentation(sections=args.section, interactive=args.interactive)
+    include_classification = not args.regression_only
+    run_presentation(
+        sections=args.section,
+        interactive=args.interactive,
+        include_classification=include_classification,
+    )
 
 
 if __name__ == "__main__":
