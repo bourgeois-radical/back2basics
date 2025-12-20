@@ -51,6 +51,10 @@ from demonstrations import (
     demonstration_4_mse_vs_mae_outliers,
     demonstration_5_model_misspecification,
     demonstration_6_real_world_example,
+    # Part 1.5: Regularization and Bias-Variance
+    demonstration_12_regularization_as_map,
+    demonstration_13_bias_variance_in_residuals,
+    demonstration_14_overfitting_detection,
     # Part 2: Classification
     demonstration_7_classification_imbalance,
     demonstration_8_bias_variance_residuals,
@@ -240,10 +244,75 @@ def section_3c():
     demonstration_6_real_world_example(dataset_name="california_housing")
 
 
-def section_4():
+def section_4_regularization():
     """
-    SECTION 4: Classification with Imbalanced Data (~6 minutes)
-    ============================================================
+    SECTION 4: Regularization and Bias-Variance (~12 minutes)
+    ==========================================================
+
+    SPEAKER NOTE: This connects MLE to Bayesian thinking and regularization.
+
+    Part A: Regularization as MAP (~5 minutes)
+    ------------------------------------------
+    Key insight: Regularization = Maximum A Posteriori (MAP) estimation
+
+    The framework:
+    - MLE: Maximize P(data | parameters)
+    - MAP: Maximize P(data | parameters) × P(parameters)
+                        ↑                      ↑
+                    Likelihood              Prior
+                      (MLE)            (Regularization)
+
+    Specific correspondences:
+    - Gaussian prior on β → L2 penalty (Ridge) → shrinks all coefficients
+    - Laplace prior on β → L1 penalty (Lasso) → sparsity (some β = 0)
+
+    Show regularization paths:
+    - Coefficients vs λ: watch them shrink toward zero
+    - CV error vs λ: U-curve shows optimal regularization
+    - Lasso makes coefficients exactly zero (feature selection!)
+
+    Part B: Bias-Variance Tradeoff (~4 minutes)
+    -------------------------------------------
+    The fundamental theorem:
+        E[Error] = Bias² + Variance + Irreducible Noise
+
+    Show the classic U-curve:
+    - Low complexity (high λ): High bias, low variance
+    - High complexity (low λ): Low bias, high variance
+    - Sweet spot: Minimum test error
+
+    Connect to residuals:
+    - High bias: Systematic patterns in residuals
+    - High variance: Large gap between train and test residuals
+
+    Part C: Detecting Overfitting (~3 minutes)
+    ------------------------------------------
+    Practical diagnostics:
+    1. Train-test gap: Large gap = overfitting
+    2. Learning curves: Gap between curves shows variance
+    3. Residual patterns: Systematic = bias, random = good
+
+    Solution: Regularization trades bias for variance!
+    """
+    print("\n" + "=" * 70)
+    print("  PART 1.5: REGULARIZATION AND BIAS-VARIANCE")
+    print("  The Bayesian connection: Regularization = Prior belief")
+    print("=" * 70 + "\n")
+
+    # Part A: Regularization as MAP
+    demonstration_12_regularization_as_map()
+
+    # Part B: Bias-Variance
+    demonstration_13_bias_variance_in_residuals()
+
+    # Part C: Overfitting Detection
+    demonstration_14_overfitting_detection()
+
+
+def section_4_classification():
+    """
+    SECTION 4 (LEGACY): Classification with Imbalanced Data (~6 minutes)
+    =====================================================================
 
     SPEAKER NOTE: MLE fails spectacularly with class imbalance!
 
@@ -448,21 +517,23 @@ def run_presentation(sections=None, interactive=False, include_classification=Tr
         1: ("PART 1: The Three Distributions", section_1),
         2: ("MLE to MSE and MAE", lambda: (section_2a(), section_2b())),
         3: ("Loss Functions in Action", lambda: (section_3a(), section_3b(), section_3c())),
-        4: ("Bias-Variance (Bonus)", section_5),
+        # Part 1.5: Regularization and Bias-Variance
+        4: ("Regularization and Bias-Variance", section_4_regularization),
+        5: ("Legacy Bias-Variance (Bonus)", section_5),
         # Part 2: Classification
-        5: ("PART 2: Bernoulli to Cross-Entropy", section_6),
-        6: ("Alternative Classification Losses", section_7),
-        7: ("Class Imbalance and Metrics", section_8),
+        6: ("PART 2: Bernoulli to Cross-Entropy", section_6),
+        7: ("Alternative Classification Losses", section_7),
+        8: ("Class Imbalance and Metrics", section_8),
         # Summary
-        8: ("Summary", section_summary),
+        9: ("Summary", section_summary),
     }
 
     if sections is None:
         if include_classification:
             sections = list(all_sections.keys())
         else:
-            # Only Part 1 and Summary
-            sections = [1, 2, 3, 4, 8]
+            # Only Part 1 (Regression + Regularization) and Summary
+            sections = [1, 2, 3, 4, 9]
 
     for section_num in sections:
         if section_num not in all_sections:
@@ -499,10 +570,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    python main.py                   # Run full presentation (regression + classification)
-    python main.py --regression-only # Only Part 1: Regression
+    python main.py                   # Run full presentation (all parts)
+    python main.py --regression-only # Only Part 1 + Part 1.5 (no classification)
     python main.py --section 1       # Run section 1 only
-    python main.py --section 5 6 7   # Run classification sections only
+    python main.py --section 4       # Run regularization section only
+    python main.py --section 6 7 8   # Run classification sections only
     python main.py --interactive     # Pause after each section
     python main.py --list            # List all sections
         """,
@@ -511,7 +583,7 @@ Examples:
         "--section", "-s",
         type=int,
         nargs="+",
-        help="Which sections to run (1-8)",
+        help="Which sections to run (1-9)",
     )
     parser.add_argument(
         "--interactive", "-i",
@@ -545,22 +617,29 @@ Examples:
         print("   - MSE vs MAE with outliers")
         print("   - Model misspecification")
         print("   - Real world example (California Housing)")
-        print("4. Bias-Variance in Residuals (Bonus)")
+        print()
+        print("PART 1.5: REGULARIZATION & BIAS-VARIANCE (~12 min)")
+        print("-" * 60)
+        print("4. Regularization and Bias-Variance (~12 min)")
+        print("   - Ridge = Gaussian prior (L2), Lasso = Laplace prior (L1)")
+        print("   - Bias-variance decomposition theorem")
+        print("   - Learning curves and overfitting detection")
+        print("5. Legacy Bias-Variance (Bonus)")
         print()
         print("PART 2: CLASSIFICATION (~18 min)")
         print("-" * 60)
-        print("5. Bernoulli to Cross-Entropy (~7 min)")
+        print("6. Bernoulli to Cross-Entropy (~7 min)")
         print("   - Same MLE framework applied to classification")
-        print("6. Alternative Classification Losses (~3 min)")
+        print("7. Alternative Classification Losses (~3 min)")
         print("   - Probit, complementary log-log, hinge loss")
-        print("7. Class Imbalance and Metrics (~5 min)")
+        print("8. Class Imbalance and Metrics (~5 min)")
         print("   - Why accuracy fails, which metrics are robust")
         print()
-        print("8. Summary (~2 min)")
+        print("9. Summary (~2 min)")
         print()
         print("=" * 60)
-        print("Total: ~40 minutes (with both parts)")
-        print("       ~20 minutes (regression only)")
+        print("Total: ~50 minutes (with all parts)")
+        print("       ~32 minutes (regression + regularization only)")
         return
 
     include_classification = not args.regression_only
