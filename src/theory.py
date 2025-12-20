@@ -573,3 +573,494 @@ def compare_gaussian_vs_laplace(
 
     plt.tight_layout()
     return fig
+
+
+# =============================================================================
+# PART 2: CLASSIFICATION - Bernoulli and Cross-Entropy
+# =============================================================================
+
+
+def derive_crossentropy_from_bernoulli_mle(show_steps: bool = True) -> str:
+    """
+    Show mathematical derivation: Bernoulli MLE -> Cross-Entropy.
+
+    Parameters
+    ----------
+    show_steps : bool
+        If True, return formatted derivation
+
+    Returns
+    -------
+    derivation : str
+        Formatted text showing:
+        1. Bernoulli distribution: P(y|p) = p^y * (1-p)^(1-y)
+        2. Likelihood for dataset
+        3. Log-likelihood
+        4. Negative log-likelihood = Binary cross-entropy
+
+    Notes
+    -----
+    This is THE key connection for classification.
+    Shows cross-entropy is not arbitrary - it's MLE under Bernoulli.
+    Parallel to Gaussian -> MSE derivation.
+    """
+    derivation = """
+================================================================================
+                DERIVING CROSS-ENTROPY FROM BERNOULLI MLE
+================================================================================
+
+SETUP: Binary classification
+       - True label: y_i in {0, 1}
+       - Model prediction: p_i = P(y_i = 1 | x_i) in (0, 1)
+
+ASSUMPTION: Each label is drawn from a Bernoulli distribution
+            y_i ~ Bernoulli(p_i)
+
+STEP 1: Write the Bernoulli PMF for a single observation
+------------------------------------------------------------------------
+        P(y_i | p_i) = p_i^{y_i} * (1 - p_i)^{1 - y_i}
+
+        Why this formula works:
+        - If y_i = 1: P(y_i = 1 | p_i) = p_i^1 * (1-p_i)^0 = p_i       ✓
+        - If y_i = 0: P(y_i = 0 | p_i) = p_i^0 * (1-p_i)^1 = 1 - p_i   ✓
+
+STEP 2: Write the likelihood for all observations (assuming independence)
+------------------------------------------------------------------------
+        L(theta) = prod_{i=1}^{n} P(y_i | p_i)
+
+                 = prod_{i=1}^{n} p_i^{y_i} * (1 - p_i)^{1 - y_i}
+
+        where p_i = f(x_i; theta) is the model's predicted probability
+
+STEP 3: Take the log (log-likelihood)
+------------------------------------------------------------------------
+        log L(theta) = sum_{i=1}^{n} [ y_i * log(p_i) + (1 - y_i) * log(1 - p_i) ]
+
+        This is the LOG-LIKELIHOOD for binary classification.
+
+STEP 4: Maximize log-likelihood = Minimize negative log-likelihood
+------------------------------------------------------------------------
+        -log L(theta) = -sum_{i=1}^{n} [ y_i * log(p_i) + (1 - y_i) * log(1 - p_i) ]
+
+                      = sum_{i=1}^{n} [ -y_i * log(p_i) - (1 - y_i) * log(1 - p_i) ]
+
+STEP 5: Recognize this as BINARY CROSS-ENTROPY
+------------------------------------------------------------------------
+        Binary Cross-Entropy Loss:
+
+        L_BCE = (1/n) * sum_{i=1}^{n} [ -y_i * log(p_i) - (1 - y_i) * log(1 - p_i) ]
+
+        This is exactly the negative log-likelihood (divided by n)!
+
+================================================================================
+                            CONCLUSION
+================================================================================
+
+        Bernoulli assumption  -->  Cross-Entropy loss function
+
+        When we minimize cross-entropy, we are implicitly assuming that
+        the labels are drawn from Bernoulli distributions!
+
+        THE PATTERN IS THE SAME AS REGRESSION:
+        ┌─────────────────────────────────────────────────────────────────┐
+        │  Regression:      Gaussian noise    -->  MSE loss               │
+        │  Regression:      Laplace noise     -->  MAE loss               │
+        │  Classification:  Bernoulli labels  -->  Cross-Entropy loss     │
+        └─────────────────────────────────────────────────────────────────┘
+
+        Choose your distributional assumption --> Get your loss function!
+
+================================================================================
+"""
+    if show_steps:
+        return derivation
+    return "Bernoulli MLE -> Cross-Entropy (see derive_crossentropy_from_bernoulli_mle(show_steps=True))"
+
+
+def why_bernoulli_distribution(show_reasoning: bool = True) -> str:
+    """
+    Explain why Bernoulli is the natural choice for binary classification.
+
+    Parameters
+    ----------
+    show_reasoning : bool
+        If True, return detailed explanation
+
+    Returns
+    -------
+    explanation : str
+        Formatted text explaining why Bernoulli is used
+
+    Notes
+    -----
+    Helps students understand this isn't arbitrary.
+    Bernoulli is the "least presumptuous" distribution for binary data.
+    """
+    explanation = """
+================================================================================
+                    WHY BERNOULLI DISTRIBUTION?
+================================================================================
+
+QUESTION: Why do we assume labels come from a Bernoulli distribution?
+          Is this just arbitrary, or is there a deeper reason?
+
+ANSWER: Bernoulli is the ONLY reasonable choice for binary outcomes.
+        Here's why:
+
+REASON 1: MAXIMUM ENTROPY PRINCIPLE
+------------------------------------------------------------------------
+Given:
+- We only know P(y=1) = p
+- We want a distribution over {0, 1}
+
+The Bernoulli distribution MAXIMIZES ENTROPY subject to this constraint.
+- It makes the fewest assumptions beyond what we know
+- Any other distribution would assume more structure than we have evidence for
+
+Entropy of Bernoulli(p) = -p*log(p) - (1-p)*log(1-p)
+
+This is the "least presumptuous" distribution for binary data!
+
+REASON 2: NATURAL FOR BINARY OUTCOMES
+------------------------------------------------------------------------
+Bernoulli is THE distribution for single binary trials:
+- Coin flip: heads (1) or tails (0)
+- Disease: present (1) or absent (0)
+- Email: spam (1) or not spam (0)
+- Click: clicked (1) or didn't click (0)
+
+Single parameter p completely specifies the distribution.
+No other parameters needed - it's the simplest possible model.
+
+REASON 3: CONJUGATE TO LOGISTIC FUNCTION
+------------------------------------------------------------------------
+Logistic regression outputs: p = sigmoid(w^T x) = 1 / (1 + e^{-w^T x})
+
+This gives p in (0, 1) - EXACTLY the domain of Bernoulli's parameter!
+
+The logistic function naturally produces valid probability estimates.
+Bernoulli then uses these to model the binary outcome.
+
+Perfect match: Logistic output --> Bernoulli parameter --> Binary outcome
+
+REASON 4: MATHEMATICAL CONVENIENCE
+------------------------------------------------------------------------
+The Bernoulli log-likelihood has nice properties:
+- Convex in log-odds (logit(p))
+- Leads to convex cross-entropy loss
+- Gradient is simple: sum of (y_i - p_i) * x_i
+- Enables efficient optimization
+
+================================================================================
+                            KEY INSIGHT
+================================================================================
+
+Bernoulli is not arbitrary - it's the UNIQUE distribution that:
+1. Models binary outcomes
+2. Uses only what we know (P(y=1) = p)
+3. Makes minimal additional assumptions
+4. Has nice mathematical properties for optimization
+
+Just like:
+- Gaussian is natural for continuous data with known mean and variance
+- Laplace is natural for heavy-tailed continuous data
+- Poisson is natural for count data
+
+Each distribution matches the TYPE of data and makes minimal assumptions.
+
+================================================================================
+"""
+    if show_reasoning:
+        return explanation
+    return "Bernoulli is the maximum entropy distribution for binary outcomes."
+
+
+def demonstrate_probability_calibration(
+    y_true: np.ndarray,
+    y_pred_proba: np.ndarray,
+    n_bins: int = 10,
+    show_plot: bool = True,
+) -> tuple[tuple[np.ndarray, np.ndarray], float, Figure | None]:
+    """
+    Check if predicted probabilities are calibrated.
+
+    Parameters
+    ----------
+    y_true : np.ndarray
+        True binary labels
+    y_pred_proba : np.ndarray
+        Predicted probabilities
+    n_bins : int
+        Number of bins for calibration curve
+    show_plot : bool
+        Whether to create visualization
+
+    Returns
+    -------
+    calibration_curve : tuple
+        (prob_true, prob_pred) for each bin
+    brier_score : float
+        Mean squared difference between predicted prob and actual outcome
+    fig : matplotlib Figure or None
+
+    Notes
+    -----
+    Good calibration means:
+    - When model says 30%, ~30% of those samples are actually positive
+    - Bernoulli assumption is validated by good calibration
+    - Poor calibration suggests wrong distributional assumption
+
+    This is the "residual check" for classification!
+    """
+    y_true = np.asarray(y_true).flatten()
+    y_pred_proba = np.asarray(y_pred_proba).flatten()
+
+    # Calculate Brier score (MSE of probability estimates)
+    brier_score = np.mean((y_pred_proba - y_true) ** 2)
+
+    # Calculate calibration curve
+    bin_edges = np.linspace(0, 1, n_bins + 1)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+    prob_true = []
+    prob_pred = []
+    bin_counts = []
+
+    for i in range(n_bins):
+        mask = (y_pred_proba >= bin_edges[i]) & (y_pred_proba < bin_edges[i + 1])
+        if i == n_bins - 1:  # Include right edge for last bin
+            mask = (y_pred_proba >= bin_edges[i]) & (y_pred_proba <= bin_edges[i + 1])
+
+        if mask.sum() > 0:
+            prob_true.append(y_true[mask].mean())
+            prob_pred.append(y_pred_proba[mask].mean())
+            bin_counts.append(mask.sum())
+        else:
+            prob_true.append(np.nan)
+            prob_pred.append(np.nan)
+            bin_counts.append(0)
+
+    prob_true = np.array(prob_true)
+    prob_pred = np.array(prob_pred)
+
+    fig = None
+    if show_plot:
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+        # Panel 1: Reliability diagram
+        ax1 = axes[0]
+        ax1.plot([0, 1], [0, 1], "r--", linewidth=2, label="Perfect calibration")
+
+        # Filter out NaN values for plotting
+        valid_mask = ~np.isnan(prob_true)
+        ax1.scatter(
+            prob_pred[valid_mask],
+            prob_true[valid_mask],
+            s=np.array(bin_counts)[valid_mask] * 2,
+            alpha=0.7,
+            color="steelblue",
+            edgecolor="black",
+        )
+        ax1.plot(prob_pred[valid_mask], prob_true[valid_mask], "b-", alpha=0.5)
+
+        ax1.set_xlabel("Mean Predicted Probability", fontsize=12)
+        ax1.set_ylabel("Fraction of Positives", fontsize=12)
+        ax1.set_title("Reliability Diagram (Calibration Curve)", fontsize=14)
+        ax1.set_xlim(-0.05, 1.05)
+        ax1.set_ylim(-0.05, 1.05)
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+
+        ax1.text(
+            0.05, 0.95,
+            f"Brier Score: {brier_score:.4f}\n(lower is better)",
+            transform=ax1.transAxes,
+            verticalalignment="top",
+            fontsize=10,
+            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+        )
+
+        # Panel 2: Histogram of predictions by class
+        ax2 = axes[1]
+        ax2.hist(
+            y_pred_proba[y_true == 0],
+            bins=20, alpha=0.6, label="Class 0", color="blue", density=True
+        )
+        ax2.hist(
+            y_pred_proba[y_true == 1],
+            bins=20, alpha=0.6, label="Class 1", color="orange", density=True
+        )
+        ax2.set_xlabel("Predicted Probability", fontsize=12)
+        ax2.set_ylabel("Density", fontsize=12)
+        ax2.set_title("Predicted Probabilities by True Class", fontsize=14)
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+
+    return (prob_true, prob_pred), brier_score, fig
+
+
+def compare_classification_distributions() -> str:
+    """
+    Compare different distributional assumptions for binary classification.
+
+    Returns
+    -------
+    comparison : str
+        Formatted comparison of distributions
+
+    Notes
+    -----
+    Shows alternatives to Bernoulli and when to use them.
+    Most of the time Bernoulli is fine, but good to know alternatives exist.
+    """
+    comparison = """
+================================================================================
+            ALTERNATIVE DISTRIBUTIONS FOR BINARY CLASSIFICATION
+================================================================================
+
+Most of the time, Bernoulli + cross-entropy works well.
+But here are alternatives and when to consider them:
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│  DISTRIBUTION      │  LOSS FUNCTION     │  WHEN TO USE                    │
+├────────────────────┼────────────────────┼─────────────────────────────────┤
+│  Bernoulli         │  Cross-Entropy     │  Standard choice for binary     │
+│  (Logistic)        │  (Log Loss)        │  classification. Works 90%+     │
+│                    │                    │  of the time.                   │
+├────────────────────┼────────────────────┼─────────────────────────────────┤
+│  Probit            │  Probit NLL        │  When you believe there's a     │
+│  (Gaussian latent) │                    │  latent Gaussian variable.      │
+│                    │                    │  E.g., credit scoring.          │
+├────────────────────┼────────────────────┼─────────────────────────────────┤
+│  Complementary     │  Cloglog NLL       │  For rare events with           │
+│  Log-Log           │                    │  asymmetric probability.        │
+│                    │                    │  E.g., equipment failure.       │
+├────────────────────┼────────────────────┼─────────────────────────────────┤
+│  Beta-Binomial     │  Custom NLL        │  Overdispersed binary data.     │
+│                    │                    │  E.g., repeated measurements    │
+│                    │                    │  from same subject.             │
+├────────────────────┼────────────────────┼─────────────────────────────────┤
+│  Hinge Loss        │  max(0, 1-y*f(x))  │  NON-probabilistic!             │
+│  (SVM)             │                    │  Only care about decision       │
+│                    │                    │  boundary, not probabilities.   │
+└────────────────────────────────────────────────────────────────────────────┘
+
+LINK FUNCTIONS (how we convert linear predictor to probability):
+------------------------------------------------------------------------
+- Logistic (Bernoulli):     p = 1 / (1 + exp(-z))        Symmetric S-curve
+- Probit:                   p = Phi(z)                   Gaussian CDF
+- Complementary log-log:    p = 1 - exp(-exp(z))         Asymmetric
+
+All three give similar results in practice for most datasets.
+Logistic is most common because it's mathematically convenient.
+
+PRACTICAL ADVICE:
+------------------------------------------------------------------------
+1. START with Bernoulli (logistic regression, cross-entropy)
+2. Check calibration with reliability diagram
+3. If poor calibration:
+   - Try probit (especially for latent variable interpretation)
+   - Consider cloglog for rare events
+   - Use Platt scaling or isotonic regression to recalibrate
+4. If overdispersion suspected, consider beta-binomial
+
+For most problems, just use cross-entropy and you'll be fine!
+
+================================================================================
+"""
+    return comparison
+
+
+def explain_cross_entropy_properties() -> str:
+    """
+    Explain the mathematical properties of cross-entropy loss.
+
+    Returns
+    -------
+    explanation : str
+        Formatted explanation
+
+    Notes
+    -----
+    Helps understand why cross-entropy behaves the way it does.
+    """
+    explanation = """
+================================================================================
+                    PROPERTIES OF CROSS-ENTROPY LOSS
+================================================================================
+
+FORMULA: L = -[y * log(p) + (1-y) * log(1-p)]
+
+WHERE:
+- y = true label (0 or 1)
+- p = predicted probability of class 1
+
+PROPERTY 1: ASYMMETRIC PENALTIES
+------------------------------------------------------------------------
+For y = 1 (positive class):    L = -log(p)
+For y = 0 (negative class):    L = -log(1-p)
+
+Loss curves are ASYMMETRIC:
+- As p -> 0 with y=1: L -> infinity  (very bad to be confident and wrong!)
+- As p -> 1 with y=0: L -> infinity  (very bad to be confident and wrong!)
+- At p = y: L = 0 (perfect prediction)
+
+This heavily penalizes CONFIDENT WRONG predictions.
+Compare to MSE which has bounded loss (maximum = 1 for binary).
+
+PROPERTY 2: CONVEXITY
+------------------------------------------------------------------------
+Cross-entropy is CONVEX in the log-odds (logit):
+    logit(p) = log(p / (1-p))
+
+This means:
+- No local minima to get stuck in
+- Gradient descent finds global optimum
+- Logistic regression has unique solution
+
+PROPERTY 3: GRADIENT
+------------------------------------------------------------------------
+For logistic regression with p = sigmoid(w^T x):
+
+    dL/dw = (p - y) * x
+
+This is beautifully simple:
+- Error term: (p - y) = predicted - actual
+- Direction: x = input features
+- Update: Push weights in direction that reduces error
+
+Compare to MSE gradient: 2(p - y) * p * (1-p) * x
+Cross-entropy gradient is cleaner!
+
+PROPERTY 4: INFORMATION-THEORETIC INTERPRETATION
+------------------------------------------------------------------------
+Cross-entropy measures:
+    H(y, p) = -E_y[log(p)]
+
+This is the expected number of bits needed to encode the true labels
+using the predicted distribution p.
+
+Minimizing cross-entropy = Making predictions match true distribution
+                        = Maximum likelihood estimation!
+
+================================================================================
+                    COMPARISON: CROSS-ENTROPY vs MSE for CLASSIFICATION
+================================================================================
+
+You COULD use MSE for classification: L = (y - p)^2
+
+Why cross-entropy is better:
+1. Gradient doesn't vanish at p near 0 or 1
+2. Heavier penalty for confident mistakes
+3. Proper probabilistic interpretation
+4. Matches the Bernoulli likelihood
+
+MSE for classification has the "saturating gradient" problem:
+- If p = 0.99 and y = 0, MSE gradient is small
+- Cross-entropy gradient is still large (because -log(0.01) is big)
+
+================================================================================
+"""
+    return explanation
