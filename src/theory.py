@@ -576,6 +576,477 @@ def compare_gaussian_vs_laplace(
 
 
 # =============================================================================
+# PART 1.5: REGULARIZATION & BIAS-VARIANCE THEORY
+# =============================================================================
+
+
+def derive_ridge_from_map(show_steps: bool = True) -> str:
+    """
+    Show Ridge regression (L2) is MAP estimation with Gaussian prior.
+
+    This is THE key connection: Regularization = Bayesian prior!
+
+    Parameters
+    ----------
+    show_steps : bool
+        Show derivation steps
+
+    Returns
+    -------
+    derivation : str
+        Formatted derivation showing Ridge = MLE + Gaussian prior
+    """
+    if not show_steps:
+        return "Ridge Regression = MAP with Gaussian prior on parameters"
+
+    derivation = """
+================================================================================
+            RIDGE REGRESSION = MAP WITH GAUSSIAN PRIOR
+================================================================================
+
+STEP 1: STANDARD MLE (No Regularization)
+─────────────────────────────────────────
+We want to find θ that maximizes likelihood:
+
+    θ* = argmax P(y|X,θ)
+
+For Gaussian noise:
+    P(y|X,θ) = ∏ᵢ N(yᵢ | Xᵢθ, σ²)
+
+Taking negative log-likelihood:
+    -log P(y|X,θ) = (1/2σ²) Σᵢ(yᵢ - Xᵢθ)² + const
+                  = (1/2σ²) ||y - Xθ||² + const
+
+Minimizing this gives MSE loss (ignoring constants):
+    L_MSE = ||y - Xθ||²
+
+
+STEP 2: BAYESIAN VIEW - ADD A PRIOR
+───────────────────────────────────
+What if we have prior belief about θ?
+
+Using Bayes' rule:
+    P(θ|y,X) ∝ P(y|X,θ) · P(θ)
+               ─────────   ────
+               likelihood   prior
+
+MAP estimate = Maximum A Posteriori:
+    θ* = argmax P(θ|y,X)
+       = argmax P(y|X,θ) · P(θ)
+
+
+STEP 3: GAUSSIAN PRIOR ON θ
+───────────────────────────
+Assume each parameter is drawn from:
+    θⱼ ~ N(0, τ²)
+
+This encodes belief: "Parameters should be close to zero"
+
+The prior distribution:
+    P(θ) = ∏ⱼ N(θⱼ | 0, τ²)
+         ∝ exp(-||θ||² / 2τ²)
+
+
+STEP 4: DERIVE MAP OBJECTIVE
+────────────────────────────
+Taking negative log of posterior:
+
+    -log P(θ|y,X) = -log P(y|X,θ) - log P(θ) + const
+                  = (1/2σ²)||y - Xθ||² + (1/2τ²)||θ||² + const
+
+Let λ = σ²/τ²:
+
+    L_Ridge = ||y - Xθ||² + λ||θ||²
+              ─────────────   ───────
+              Data fit term   L2 penalty
+
+
+STEP 5: INTERPRETATION
+──────────────────────
+                    ┌──────────────────────────────────────────┐
+                    │  Ridge Loss = MSE + λ·||θ||²             │
+                    │             = MLE + Gaussian Prior       │
+                    └──────────────────────────────────────────┘
+
+λ controls the tradeoff:
+    • λ = 0:  No prior → Pure MLE (can overfit)
+    • λ → ∞: Strong prior → θ → 0 (underfits)
+    • λ optimal: Balance between data fit and prior belief
+
+τ² = 1/λ is the prior variance:
+    • Large τ²: Weak prior, trust data more
+    • Small τ²: Strong prior, shrink θ toward 0
+"""
+    return derivation
+
+
+def derive_lasso_from_map(show_steps: bool = True) -> str:
+    """
+    Show Lasso regression (L1) is MAP with Laplace prior.
+
+    Parallel to Ridge derivation.
+
+    Parameters
+    ----------
+    show_steps : bool
+        Show steps
+
+    Returns
+    -------
+    derivation : str
+        Formatted derivation
+    """
+    if not show_steps:
+        return "Lasso Regression = MAP with Laplace prior on parameters"
+
+    derivation = """
+================================================================================
+            LASSO REGRESSION = MAP WITH LAPLACE PRIOR
+================================================================================
+
+STEP 1: SAME SETUP AS RIDGE
+───────────────────────────
+MAP estimate:
+    θ* = argmax P(y|X,θ) · P(θ)
+
+Likelihood is still Gaussian:
+    P(y|X,θ) ∝ exp(-||y - Xθ||² / 2σ²)
+
+
+STEP 2: LAPLACE PRIOR ON θ
+──────────────────────────
+Instead of Gaussian, use Laplace (double exponential):
+
+    θⱼ ~ Laplace(0, b)
+
+    P(θⱼ) = (1/2b) exp(-|θⱼ|/b)
+
+This is the "pointy" distribution with sharp peak at 0!
+
+For all parameters:
+    P(θ) = ∏ⱼ Laplace(θⱼ | 0, b)
+         ∝ exp(-||θ||₁ / b)
+
+where ||θ||₁ = Σⱼ|θⱼ| is the L1 norm.
+
+
+STEP 3: DERIVE MAP OBJECTIVE
+────────────────────────────
+Taking negative log of posterior:
+
+    -log P(θ|y,X) = -log P(y|X,θ) - log P(θ) + const
+                  = (1/2σ²)||y - Xθ||² + (1/b)||θ||₁ + const
+
+Let λ = σ²/b:
+
+    L_Lasso = ||y - Xθ||² + λ||θ||₁
+              ─────────────   ────────
+              Data fit term   L1 penalty
+
+
+STEP 4: WHY L1 INDUCES SPARSITY
+───────────────────────────────
+
+Compare the priors:
+
+    Gaussian (L2):     Laplace (L1):
+         ╱╲                 ╱╲
+        ╱  ╲               ╱  ╲
+       ╱    ╲             ╱    ╲
+      ╱      ╲           ╱      ╲
+     ╱        ╲         ╱        ╲
+    ━━━━━━━━━━━━━     ━━━━━━━━━━━━━
+    (smooth peak)     (sharp peak!)
+
+Laplace has a SHARP PEAK at zero.
+This means P(θⱼ = 0) is relatively high!
+
+Geometrically:
+    L2 constraint: ||θ||² ≤ c → circle (no corners)
+    L1 constraint: ||θ||₁ ≤ c → diamond (corners at axes!)
+
+Solutions tend to hit the corners → exact zeros!
+
+
+STEP 5: INTERPRETATION
+──────────────────────
+                    ┌──────────────────────────────────────────┐
+                    │  Lasso Loss = MSE + λ·||θ||₁             │
+                    │             = MLE + Laplace Prior        │
+                    └──────────────────────────────────────────┘
+
+Key difference from Ridge:
+    • Ridge: Shrinks ALL coefficients toward 0 (but never exactly 0)
+    • Lasso: Sets SOME coefficients EXACTLY to 0 → Feature Selection!
+
+When to use which:
+    • Ridge: All features somewhat relevant, just want shrinkage
+    • Lasso: Many irrelevant features, want automatic selection
+    • ElasticNet: Mix of both (L1 + L2 penalty)
+"""
+    return derivation
+
+
+def bias_variance_decomposition_theorem(show_proof: bool = True) -> str:
+    """
+    State and prove bias-variance decomposition.
+
+    Parameters
+    ----------
+    show_proof : bool
+        Show mathematical proof
+
+    Returns
+    -------
+    theorem : str
+        LaTeX formatted theorem and proof
+    """
+    if not show_proof:
+        return "E[MSE] = Bias² + Variance + Irreducible Noise"
+
+    theorem = """
+================================================================================
+             BIAS-VARIANCE DECOMPOSITION THEOREM
+================================================================================
+
+THEOREM
+───────
+For any estimator f̂(x) of the true function f(x), with noisy observations
+y = f(x) + ε where ε ~ N(0, σ²):
+
+    E[(y - f̂(x))²] = Bias²(f̂) + Var(f̂) + σ²
+                      ─────────   ───────   ──
+                        Bias²    Variance  Irreducible
+                                             Noise
+
+
+DEFINITIONS
+───────────
+• Bias(f̂) = E[f̂(x)] - f(x)
+  The systematic error: How far is the average prediction from truth?
+
+• Var(f̂) = E[(f̂(x) - E[f̂(x)])²]
+  The variability: How much does f̂ change across different training sets?
+
+• σ² = Var(ε)
+  Irreducible noise: Random error in the data itself
+
+
+PROOF
+─────
+Let's expand the expected squared error:
+
+E[(y - f̂)²] = E[(f + ε - f̂)²]                    # y = f + ε
+
+            = E[(f - f̂)² + 2(f - f̂)ε + ε²]       # Expand
+
+            = E[(f - f̂)²] + 2E[(f - f̂)]E[ε] + E[ε²]   # E[ε]=0
+
+            = E[(f - f̂)²] + σ²                    # Simplify
+
+Now expand E[(f - f̂)²]:
+
+E[(f - f̂)²] = E[(f - E[f̂] + E[f̂] - f̂)²]        # Add and subtract E[f̂]
+
+            = E[(f - E[f̂])² + 2(f - E[f̂])(E[f̂] - f̂) + (E[f̂] - f̂)²]
+
+            = (f - E[f̂])² + 0 + E[(E[f̂] - f̂)²]   # Cross term = 0
+
+            = Bias²(f̂) + Var(f̂)                   # By definition
+
+Therefore:
+    E[(y - f̂)²] = Bias² + Variance + σ²   ∎
+
+
+IMPLICATIONS
+────────────
+1. You CANNOT reduce σ² (it's in the data)
+2. Reducing Bias often INCREASES Variance (and vice versa)
+3. Optimal model BALANCES Bias and Variance
+
+Model Complexity Effect:
+    Low complexity  → High Bias, Low Variance  (underfitting)
+    High complexity → Low Bias, High Variance  (overfitting)
+    Sweet spot      → Minimal total error
+"""
+    return theorem
+
+
+def mse_vs_mae_bias_variance_tradeoff() -> str:
+    """
+    Explain how MSE and MAE make different bias-variance choices.
+
+    Returns
+    -------
+    explanation : str
+        Formatted explanation of the tradeoff
+    """
+    explanation = """
+================================================================================
+       HOW DIFFERENT LOSSES AFFECT BIAS-VARIANCE TRADEOFF
+================================================================================
+
+MSE LOSS: E[(y - f̂)²]
+──────────────────────
+Penalizes errors QUADRATICALLY
+
+Properties:
+    • Large errors penalized heavily (squared!)
+    • Tries to fit ALL points, including outliers
+    • Optimal estimator = MEAN
+
+Effect on Bias-Variance:
+    • REDUCES BIAS: Aggressively chases all data points
+    • CAN INCREASE VARIANCE: Sensitive to outliers/noise
+    • Model changes a lot with different training data
+
+Best when:
+    • No outliers in data
+    • All points equally important
+    • Want unbiased predictions
+
+
+MAE LOSS: E[|y - f̂|]
+────────────────────
+Penalizes errors LINEARLY
+
+Properties:
+    • All errors penalized equally (absolute value)
+    • Less influenced by extreme values
+    • Optimal estimator = MEDIAN
+
+Effect on Bias-Variance:
+    • HIGHER BIAS: Accepts some error on extremes
+    • LOWER VARIANCE: More stable, ignores outliers
+    • Model is more consistent across training sets
+
+Best when:
+    • Data has outliers/heavy tails
+    • Want robust predictions
+    • Some error on extremes is acceptable
+
+
+COMPARISON
+──────────
+                    MSE                     MAE
+                    ───                     ───
+    Penalty:        Quadratic               Linear
+    Optimal:        Mean                    Median
+    Outliers:       Sensitive               Robust
+    Bias:           Lower                   Higher
+    Variance:       Higher                  Lower
+    Stability:      Less stable             More stable
+
+
+THE TRADEOFF PHILOSOPHY
+───────────────────────
+MSE says: "Fit EVERYTHING perfectly, even if unstable"
+MAE says: "Fit the MAJORITY well, accept error on extremes"
+
+Neither is inherently "better" - it depends on your problem!
+
+    • Care about all points equally? → MSE
+    • Have outliers / need robustness? → MAE
+    • Unsure? → Huber (hybrid: quadratic near 0, linear far away)
+"""
+    return explanation
+
+
+def regularization_effect_on_bias_variance() -> str:
+    """
+    Explain how regularization trades bias for variance.
+
+    Returns
+    -------
+    explanation : str
+        Formatted explanation
+    """
+    explanation = """
+================================================================================
+         REGULARIZATION: INTENTIONAL BIAS INJECTION
+================================================================================
+
+NO REGULARIZATION (λ = 0)
+─────────────────────────
+The model is FREE to fit training data perfectly.
+
+    • Low Bias: Can capture complex patterns
+    • High Variance: Overfits noise, unstable
+    • Train residuals: SMALL (near-perfect fit)
+    • Test residuals: LARGE (poor generalization)
+
+
+WITH REGULARIZATION (λ > 0)
+───────────────────────────
+The model is CONSTRAINED (shrunk toward 0).
+
+    • Higher Bias: Can't fit perfectly even on train
+    • Lower Variance: More stable across datasets
+    • Train residuals: MODERATE (accepts worse fit)
+    • Test residuals: SMALLER (better generalization)
+
+
+THE EXPLICIT TRADE
+──────────────────
+Loss = Data_Fit + λ × Penalty
+     = ||y - Xθ||² + λ||θ||²
+
+As λ increases:
+    ┌────────────────────────────────────────────┐
+    │  λ ↑  →  Bias ↑  →  Variance ↓             │
+    │  λ ↓  →  Bias ↓  →  Variance ↑             │
+    └────────────────────────────────────────────┘
+
+    • Train error: Increases monotonically (worse fit)
+    • Test error: U-shaped curve!
+        - Low λ: Overfitting (high test error)
+        - Optimal λ: Best generalization
+        - High λ: Underfitting (high test error again)
+
+
+FINDING OPTIMAL λ
+─────────────────
+Use cross-validation:
+    1. Try different λ values
+    2. For each λ, compute average validation error
+    3. Pick λ with lowest validation error
+
+This finds the sweet spot between bias and variance.
+
+
+RESIDUAL INTERPRETATION
+───────────────────────
+You can SEE the tradeoff in residuals:
+
+    No Regularization:
+    • Train residuals: Tiny (too good to be true!)
+    • Test residuals: Huge (model doesn't generalize)
+    • Gap: LARGE → High Variance
+
+    With Regularization:
+    • Train residuals: Moderate (some error accepted)
+    • Test residuals: Moderate (better generalization)
+    • Gap: SMALL → Variance reduced
+
+    Over-Regularization:
+    • Train residuals: Large
+    • Test residuals: Large
+    • Both high → High Bias (model too simple)
+
+
+KEY INSIGHT
+───────────
+Regularization is NOT cheating or ad-hoc!
+It's encoding a PRIOR BELIEF that parameters should be small.
+
+    λ = 0:     "I have no prior belief, trust data completely"
+    λ large:   "I strongly believe θ should be small"
+    λ optimal: "I have moderate prior belief, balance with data"
+"""
+    return explanation
+
+
+# =============================================================================
 # PART 2: CLASSIFICATION - Bernoulli and Cross-Entropy
 # =============================================================================
 
