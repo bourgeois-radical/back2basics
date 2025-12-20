@@ -766,6 +766,556 @@ def plot_imbalance_effect(
     return fig
 
 
+# =============================================================================
+# PART 2: CLASSIFICATION VISUALIZATIONS
+# =============================================================================
+
+
+def plot_cross_entropy_loss_surface(
+    y_true: np.ndarray | None = None,
+    p_range: np.ndarray | None = None,
+    figsize: tuple = (12, 5),
+) -> Figure:
+    """
+    Visualize cross-entropy loss as function of predicted probability.
+
+    Parallel to plotting MSE/MAE curves for regression.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, optional
+        True labels (for computing overall loss). If None, shows theoretical curves.
+    p_range : np.ndarray, optional
+        Range of probabilities to plot (default: 0.01 to 0.99)
+    figsize : tuple
+        Figure size
+
+    Returns
+    -------
+    fig : matplotlib Figure
+        2 subplots showing loss curves for y=1 and y=0 cases
+
+    Notes
+    -----
+    Shows how cross-entropy heavily penalizes confident wrong predictions.
+    Explains why models become well-calibrated with this loss.
+    Compare to MSE (quadratic) and MAE (linear) shapes from regression.
+    """
+    if p_range is None:
+        p_range = np.linspace(0.01, 0.99, 200)
+
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+
+    # Panel 1: Loss for y=1 (positive class)
+    ax1 = axes[0]
+    loss_y1 = -np.log(p_range)  # -log(p) when y=1
+
+    ax1.plot(p_range, loss_y1, "b-", linewidth=2)
+    ax1.set_xlabel("Predicted Probability (p)", fontsize=12)
+    ax1.set_ylabel("Loss", fontsize=12)
+    ax1.set_title("Cross-Entropy Loss when y = 1", fontsize=14)
+    ax1.set_xlim(0, 1)
+    ax1.set_ylim(0, 5)
+    ax1.axvline(1.0, color="green", linestyle="--", alpha=0.5, label="Perfect: p=1")
+    ax1.grid(True, alpha=0.3)
+
+    ax1.text(
+        0.05, 0.95,
+        "L = -log(p)\n\nAs p→0: L→∞\nAs p→1: L→0",
+        transform=ax1.transAxes,
+        verticalalignment="top",
+        fontsize=10,
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+    )
+    ax1.legend()
+
+    # Panel 2: Loss for y=0 (negative class)
+    ax2 = axes[1]
+    loss_y0 = -np.log(1 - p_range)  # -log(1-p) when y=0
+
+    ax2.plot(p_range, loss_y0, "r-", linewidth=2)
+    ax2.set_xlabel("Predicted Probability (p)", fontsize=12)
+    ax2.set_ylabel("Loss", fontsize=12)
+    ax2.set_title("Cross-Entropy Loss when y = 0", fontsize=14)
+    ax2.set_xlim(0, 1)
+    ax2.set_ylim(0, 5)
+    ax2.axvline(0.0, color="green", linestyle="--", alpha=0.5, label="Perfect: p=0")
+    ax2.grid(True, alpha=0.3)
+
+    ax2.text(
+        0.65, 0.95,
+        "L = -log(1-p)\n\nAs p→0: L→0\nAs p→1: L→∞",
+        transform=ax2.transAxes,
+        verticalalignment="top",
+        fontsize=10,
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+    )
+    ax2.legend()
+
+    plt.tight_layout()
+    return fig
+
+
+def plot_bernoulli_mle_visual(
+    y_true: np.ndarray,
+    y_pred_proba: np.ndarray,
+    figsize: tuple = (15, 10),
+) -> Figure:
+    """
+    Visualize Bernoulli MLE process for classification.
+
+    Parallel to plot_mle_derivation_visual() for regression.
+
+    Parameters
+    ----------
+    y_true : np.ndarray
+        True binary labels (0 or 1)
+    y_pred_proba : np.ndarray
+        Predicted probabilities P(y=1)
+    figsize : tuple
+        Figure size
+
+    Returns
+    -------
+    fig : matplotlib Figure
+        Multi-panel figure showing Bernoulli MLE connection to cross-entropy
+    """
+    fig, axes = plt.subplots(2, 2, figsize=figsize)
+
+    y_true = np.asarray(y_true).flatten()
+    y_pred_proba = np.asarray(y_pred_proba).flatten()
+
+    # Panel 1: Individual Sample Likelihoods
+    ax1 = axes[0, 0]
+    # Bernoulli likelihood: p^y * (1-p)^(1-y)
+    likelihoods = np.where(y_true == 1, y_pred_proba, 1 - y_pred_proba)
+
+    # Show first 50 samples as bar plot
+    n_show = min(50, len(y_true))
+    indices = np.arange(n_show)
+    colors = ["orange" if y == 1 else "blue" for y in y_true[:n_show]]
+
+    ax1.bar(indices, likelihoods[:n_show], color=colors, alpha=0.7, edgecolor="black")
+    ax1.set_xlabel("Sample Index", fontsize=10)
+    ax1.set_ylabel("Likelihood", fontsize=10)
+    ax1.set_title("1. Bernoulli Likelihood per Sample", fontsize=12)
+    ax1.axhline(0.5, color="red", linestyle="--", alpha=0.5)
+
+    # Add legend
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor="orange", label="y=1: L=p"),
+        Patch(facecolor="blue", label="y=0: L=1-p"),
+    ]
+    ax1.legend(handles=legend_elements, loc="upper right")
+
+    # Panel 2: Log-Likelihood Contributions
+    ax2 = axes[0, 1]
+    log_likelihoods = np.where(
+        y_true == 1,
+        np.log(np.clip(y_pred_proba, 1e-10, 1)),
+        np.log(np.clip(1 - y_pred_proba, 1e-10, 1)),
+    )
+
+    ax2.hist(log_likelihoods, bins=30, edgecolor="black", alpha=0.7, color="steelblue")
+    ax2.axvline(np.mean(log_likelihoods), color="red", linestyle="--",
+                label=f"Mean = {np.mean(log_likelihoods):.3f}")
+    ax2.set_xlabel("Log-Likelihood", fontsize=10)
+    ax2.set_ylabel("Frequency", fontsize=10)
+    ax2.set_title("2. Log-Likelihood Contributions", fontsize=12)
+    ax2.legend()
+
+    total_ll = np.sum(log_likelihoods)
+    ax2.text(
+        0.05, 0.95,
+        f"Total log-L = {total_ll:.2f}\nNLL = {-total_ll:.2f}",
+        transform=ax2.transAxes,
+        verticalalignment="top",
+        fontsize=10,
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+    )
+
+    # Panel 3: Cross-Entropy Loss per Sample
+    ax3 = axes[1, 0]
+    ce_loss = -log_likelihoods  # Cross-entropy = negative log-likelihood
+
+    ax3.hist(ce_loss, bins=30, edgecolor="black", alpha=0.7, color="steelblue")
+    ax3.axvline(np.mean(ce_loss), color="red", linestyle="--",
+                label=f"Mean CE = {np.mean(ce_loss):.3f}")
+    ax3.set_xlabel("Cross-Entropy Loss", fontsize=10)
+    ax3.set_ylabel("Frequency", fontsize=10)
+    ax3.set_title("3. Cross-Entropy = Negative Log-Likelihood", fontsize=12)
+    ax3.legend()
+
+    ax3.text(
+        0.65, 0.95,
+        "BCE = -[y·log(p) +\n       (1-y)·log(1-p)]",
+        transform=ax3.transAxes,
+        verticalalignment="top",
+        fontsize=10,
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+    )
+
+    # Panel 4: Calibration Curve
+    ax4 = axes[1, 1]
+    n_bins = 10
+    bin_edges = np.linspace(0, 1, n_bins + 1)
+
+    prob_true = []
+    prob_pred = []
+
+    for i in range(n_bins):
+        mask = (y_pred_proba >= bin_edges[i]) & (y_pred_proba < bin_edges[i + 1])
+        if i == n_bins - 1:
+            mask = (y_pred_proba >= bin_edges[i]) & (y_pred_proba <= bin_edges[i + 1])
+        if mask.sum() > 0:
+            prob_true.append(y_true[mask].mean())
+            prob_pred.append(y_pred_proba[mask].mean())
+
+    ax4.plot([0, 1], [0, 1], "r--", linewidth=2, label="Perfect calibration")
+    ax4.scatter(prob_pred, prob_true, s=80, color="steelblue", zorder=5)
+    ax4.plot(prob_pred, prob_true, "b-", alpha=0.5)
+    ax4.set_xlabel("Mean Predicted Probability", fontsize=10)
+    ax4.set_ylabel("Fraction of Positives", fontsize=10)
+    ax4.set_title("4. Calibration Curve (Residual Check)", fontsize=12)
+    ax4.legend()
+    ax4.set_xlim(-0.05, 1.05)
+    ax4.set_ylim(-0.05, 1.05)
+    ax4.grid(True, alpha=0.3)
+
+    ax4.text(
+        0.05, 0.95,
+        "Diagonal = Bernoulli\nassumption correct",
+        transform=ax4.transAxes,
+        verticalalignment="top",
+        fontsize=10,
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+    )
+
+    plt.tight_layout()
+    return fig
+
+
+def plot_metric_sensitivity_to_imbalance(
+    imbalance_ratios: list | None = None,
+    n_samples: int = 1000,
+    n_repeats: int = 10,
+    figsize: tuple = (15, 6),
+) -> Figure:
+    """
+    Show how different metrics respond to class imbalance.
+
+    Parameters
+    ----------
+    imbalance_ratios : list
+        Different minority class proportions to test
+    n_samples : int
+        Samples per experiment
+    n_repeats : int
+        Number of repetitions for averaging
+    figsize : tuple
+        Figure size
+
+    Returns
+    -------
+    fig : matplotlib Figure
+        Line plots showing metric values vs imbalance ratio
+
+    Notes
+    -----
+    Visual proof of which metrics "break" under imbalance.
+    Shows why accuracy is misleading and why recall/AUC are preferred.
+    """
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+
+    if imbalance_ratios is None:
+        imbalance_ratios = [0.5, 0.3, 0.2, 0.1, 0.05, 0.02, 0.01]
+
+    # Storage for metrics
+    metrics_data = {
+        "accuracy": [],
+        "precision": [],
+        "recall": [],
+        "f1": [],
+        "auc_roc": [],
+    }
+    metrics_std = {k: [] for k in metrics_data}
+
+    rng = np.random.default_rng(42)
+
+    for ratio in imbalance_ratios:
+        acc_runs, prec_runs, rec_runs, f1_runs, auc_runs = [], [], [], [], []
+
+        for _ in range(n_repeats):
+            # Generate imbalanced data
+            n_pos = int(n_samples * ratio)
+            n_neg = n_samples - n_pos
+
+            # Simple 2D separable data
+            X_pos = rng.normal(1.0, 1.0, (n_pos, 2))
+            X_neg = rng.normal(-0.5, 1.0, (n_neg, 2))
+            X = np.vstack([X_pos, X_neg])
+            y = np.array([1] * n_pos + [0] * n_neg)
+
+            # Shuffle
+            perm = rng.permutation(len(y))
+            X, y = X[perm], y[perm]
+
+            # Split
+            split = int(0.7 * len(y))
+            X_train, X_test = X[:split], X[split:]
+            y_train, y_test = y[:split], y[split:]
+
+            # Train model
+            model = LogisticRegression(random_state=42, max_iter=1000)
+            try:
+                model.fit(X_train, y_train)
+                y_pred = model.predict(X_test)
+                y_proba = model.predict_proba(X_test)[:, 1]
+
+                acc_runs.append(accuracy_score(y_test, y_pred))
+                prec_runs.append(precision_score(y_test, y_pred, zero_division=0))
+                rec_runs.append(recall_score(y_test, y_pred, zero_division=0))
+                f1_runs.append(f1_score(y_test, y_pred, zero_division=0))
+                if len(np.unique(y_test)) > 1:
+                    auc_runs.append(roc_auc_score(y_test, y_proba))
+                else:
+                    auc_runs.append(np.nan)
+            except Exception:
+                continue
+
+        metrics_data["accuracy"].append(np.mean(acc_runs) if acc_runs else np.nan)
+        metrics_data["precision"].append(np.mean(prec_runs) if prec_runs else np.nan)
+        metrics_data["recall"].append(np.mean(rec_runs) if rec_runs else np.nan)
+        metrics_data["f1"].append(np.mean(f1_runs) if f1_runs else np.nan)
+        metrics_data["auc_roc"].append(np.nanmean(auc_runs) if auc_runs else np.nan)
+
+        metrics_std["accuracy"].append(np.std(acc_runs) if acc_runs else 0)
+        metrics_std["precision"].append(np.std(prec_runs) if prec_runs else 0)
+        metrics_std["recall"].append(np.std(rec_runs) if rec_runs else 0)
+        metrics_std["f1"].append(np.std(f1_runs) if f1_runs else 0)
+        metrics_std["auc_roc"].append(np.nanstd(auc_runs) if auc_runs else 0)
+
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+
+    # Panel 1: All metrics
+    ax1 = axes[0]
+    x_positions = np.arange(len(imbalance_ratios))
+    x_labels = [f"{r:.0%}" for r in imbalance_ratios]
+
+    ax1.plot(x_positions, metrics_data["accuracy"], "b-o", label="Accuracy", linewidth=2)
+    ax1.plot(x_positions, metrics_data["precision"], "g-s", label="Precision", linewidth=2)
+    ax1.plot(x_positions, metrics_data["recall"], "r-^", label="Recall", linewidth=2)
+    ax1.plot(x_positions, metrics_data["f1"], "m-d", label="F1", linewidth=2)
+    ax1.plot(x_positions, metrics_data["auc_roc"], "k-*", label="AUC-ROC", linewidth=2, markersize=10)
+
+    ax1.set_xlabel("Minority Class Proportion", fontsize=12)
+    ax1.set_ylabel("Metric Value", fontsize=12)
+    ax1.set_title("Metric Sensitivity to Class Imbalance", fontsize=14)
+    ax1.set_xticks(x_positions)
+    ax1.set_xticklabels(x_labels)
+    ax1.legend(loc="best")
+    ax1.grid(True, alpha=0.3)
+    ax1.set_ylim(0, 1.05)
+
+    # Panel 2: Sensitivity interpretation
+    ax2 = axes[1]
+    ax2.axis("off")
+
+    explanation = """
+    METRIC SENSITIVITY TO IMBALANCE:
+
+    ⚠️  SENSITIVE (use with caution):
+    ────────────────────────────────────
+    • ACCURACY = (TP + TN) / Total
+      → Dominated by majority TN
+      → High even with random guessing
+
+    • PRECISION = TP / (TP + FP)
+      → FP comes from majority class
+      → Affected by class proportions
+
+    ✓  NOT SENSITIVE (preferred):
+    ────────────────────────────────────
+    • RECALL = TP / (TP + FN)
+      → Only looks at minority class
+      → Independent of majority size
+
+    • AUC-ROC
+      → Normalized TPR and FPR
+      → Scale-invariant
+
+    • F1 Score
+      → Harmonic mean of P and R
+      → Moderately robust
+
+    RULE OF THUMB:
+    If denominator includes majority class
+    → Metric is sensitive to imbalance
+    """
+
+    ax2.text(
+        0.05, 0.95,
+        explanation,
+        transform=ax2.transAxes,
+        verticalalignment="top",
+        fontsize=11,
+        fontfamily="monospace",
+        bbox=dict(boxstyle="round", facecolor="lightyellow", alpha=0.8),
+    )
+
+    plt.tight_layout()
+    return fig
+
+
+def plot_weighted_vs_unweighted_crossentropy(
+    y_true: np.ndarray,
+    y_pred_proba_unweighted: np.ndarray,
+    y_pred_proba_weighted: np.ndarray,
+    figsize: tuple = (15, 5),
+) -> Figure:
+    """
+    Compare unweighted vs weighted cross-entropy effects.
+
+    Parameters
+    ----------
+    y_true : np.ndarray
+        Binary labels
+    y_pred_proba_unweighted : np.ndarray
+        Probabilities from standard model
+    y_pred_proba_weighted : np.ndarray
+        Probabilities from weighted model
+    figsize : tuple
+        Figure size
+
+    Returns
+    -------
+    fig : matplotlib Figure
+        3 subplots comparing the two approaches
+    """
+    fig, axes = plt.subplots(1, 3, figsize=figsize)
+
+    y_true = np.asarray(y_true).flatten()
+    y_pred_proba_unweighted = np.asarray(y_pred_proba_unweighted).flatten()
+    y_pred_proba_weighted = np.asarray(y_pred_proba_weighted).flatten()
+
+    # Panel 1: Predicted Probability Distribution by Class
+    ax1 = axes[0]
+
+    # Unweighted
+    ax1.hist(
+        y_pred_proba_unweighted[y_true == 0],
+        bins=20, alpha=0.4, label="Unweighted: Class 0",
+        color="blue", density=True,
+    )
+    ax1.hist(
+        y_pred_proba_unweighted[y_true == 1],
+        bins=20, alpha=0.4, label="Unweighted: Class 1",
+        color="blue", density=True, hatch="//",
+    )
+
+    # Weighted (shifted histogram)
+    ax1.hist(
+        y_pred_proba_weighted[y_true == 0],
+        bins=20, alpha=0.4, label="Weighted: Class 0",
+        color="orange", density=True,
+    )
+    ax1.hist(
+        y_pred_proba_weighted[y_true == 1],
+        bins=20, alpha=0.4, label="Weighted: Class 1",
+        color="orange", density=True, hatch="\\\\",
+    )
+
+    ax1.axvline(0.5, color="red", linestyle="--", label="Threshold=0.5")
+    ax1.set_xlabel("Predicted Probability", fontsize=10)
+    ax1.set_ylabel("Density", fontsize=10)
+    ax1.set_title("Predicted Probabilities by Class", fontsize=12)
+    ax1.legend(loc="upper center", fontsize=8)
+
+    # Panel 2: Residuals (y - p_hat) by Class
+    ax2 = axes[1]
+
+    residuals_unw = y_true - y_pred_proba_unweighted
+    residuals_w = y_true - y_pred_proba_weighted
+
+    positions = [1, 2, 4, 5]
+    data = [
+        residuals_unw[y_true == 0],
+        residuals_unw[y_true == 1],
+        residuals_w[y_true == 0],
+        residuals_w[y_true == 1],
+    ]
+    bp = ax2.boxplot(data, positions=positions, widths=0.6, patch_artist=True)
+
+    colors = ["lightblue", "lightsalmon", "lightgreen", "lightyellow"]
+    for patch, color in zip(bp["boxes"], colors):
+        patch.set_facecolor(color)
+
+    ax2.set_xticks([1.5, 4.5])
+    ax2.set_xticklabels(["Unweighted", "Weighted"])
+    ax2.axhline(0, color="red", linestyle="--", alpha=0.5)
+    ax2.set_ylabel("Residual (y - p̂)", fontsize=10)
+    ax2.set_title("Classification 'Residuals' by Model", fontsize=12)
+
+    # Add legend
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor="lightblue", label="Class 0"),
+        Patch(facecolor="lightsalmon", label="Class 1"),
+    ]
+    ax2.legend(handles=legend_elements, loc="upper right")
+
+    # Panel 3: Confusion Matrix Comparison
+    ax3 = axes[2]
+
+    # Calculate confusion matrices
+    y_pred_unw = (y_pred_proba_unweighted >= 0.5).astype(int)
+    y_pred_w = (y_pred_proba_weighted >= 0.5).astype(int)
+
+    cm_unw = np.array([
+        [np.sum((y_true == 0) & (y_pred_unw == 0)), np.sum((y_true == 0) & (y_pred_unw == 1))],
+        [np.sum((y_true == 1) & (y_pred_unw == 0)), np.sum((y_true == 1) & (y_pred_unw == 1))],
+    ])
+    cm_w = np.array([
+        [np.sum((y_true == 0) & (y_pred_w == 0)), np.sum((y_true == 0) & (y_pred_w == 1))],
+        [np.sum((y_true == 1) & (y_pred_w == 0)), np.sum((y_true == 1) & (y_pred_w == 1))],
+    ])
+
+    # Side by side confusion matrices as text
+    ax3.axis("off")
+
+    cm_text = f"""
+    CONFUSION MATRICES (threshold=0.5)
+
+    UNWEIGHTED:                WEIGHTED:
+    ┌────────────────────┐     ┌────────────────────┐
+    │       Pred 0 Pred 1│     │       Pred 0 Pred 1│
+    │True 0  {cm_unw[0,0]:5d} {cm_unw[0,1]:5d} │     │True 0  {cm_w[0,0]:5d} {cm_w[0,1]:5d} │
+    │True 1  {cm_unw[1,0]:5d} {cm_unw[1,1]:5d} │     │True 1  {cm_w[1,0]:5d} {cm_w[1,1]:5d} │
+    └────────────────────┘     └────────────────────┘
+
+    Unweighted:                Weighted:
+    • High TN (biased to       • More balanced
+      majority)                • Higher TP (better
+    • Low TP (misses             minority detection)
+      minority)                • Some FP trade-off
+    """
+
+    ax3.text(
+        0.05, 0.95,
+        cm_text,
+        transform=ax3.transAxes,
+        verticalalignment="top",
+        fontsize=10,
+        fontfamily="monospace",
+        bbox=dict(boxstyle="round", facecolor="lightyellow", alpha=0.8),
+    )
+
+    plt.tight_layout()
+    return fig
+
+
 def plot_outlier_comparison(
     X: np.ndarray,
     y: np.ndarray,
