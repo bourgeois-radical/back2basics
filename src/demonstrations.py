@@ -30,24 +30,33 @@ from models import (
     train_models_with_different_losses,
 )
 from theory import (
+    compare_classification_distributions,
     compare_estimators_with_outliers,
     demonstrate_mean_minimizes_mse,
     demonstrate_median_minimizes_mae,
+    demonstrate_probability_calibration,
+    derive_crossentropy_from_bernoulli_mle,
     derive_mae_from_laplace_mle,
     derive_mse_from_gaussian_mle,
+    explain_cross_entropy_properties,
     simulate_bias_variance_tradeoff,
+    why_bernoulli_distribution,
 )
 from utils import print_key_insight, print_section_header
 from visualization import (
+    plot_bernoulli_mle_visual,
     plot_bias_variance_decomposition,
     plot_classification_residuals,
+    plot_cross_entropy_loss_surface,
     plot_imbalance_effect,
     plot_loss_function_comparison,
     plot_loss_function_shapes,
+    plot_metric_sensitivity_to_imbalance,
     plot_mle_derivation_visual,
     plot_outlier_comparison,
     plot_residuals_diagnostic,
     plot_three_distributions_concept,
+    plot_weighted_vs_unweighted_crossentropy,
 )
 
 
@@ -630,51 +639,543 @@ Loss function affects this tradeoff!
 """)
 
 
+# =============================================================================
+# PART 2: CLASSIFICATION DEMONSTRATIONS
+# =============================================================================
+
+
+def demonstration_9_bernoulli_to_crossentropy(
+    n_samples: int = 500,
+    random_state: int = 42,
+) -> None:
+    """
+    SECTION 2.2: Derive cross-entropy from Bernoulli MLE.
+
+    Parallel to demonstration_2_mle_to_mse() for regression.
+
+    Parameters
+    ----------
+    n_samples : int
+        Number of samples
+    random_state : int
+        Random seed
+
+    Notes
+    -----
+    This is THE core concept for classification.
+    Makes explicit: Cross-entropy is not arbitrary, it's MLE under Bernoulli.
+    Students should walk away understanding this connection.
+    """
+    from sklearn.linear_model import LogisticRegression
+
+    from theory import (
+        derive_crossentropy_from_bernoulli_mle,
+        why_bernoulli_distribution,
+        demonstrate_probability_calibration,
+    )
+    from visualization import plot_bernoulli_mle_visual, plot_cross_entropy_loss_surface
+
+    print_section_header(
+        2.2,
+        "From Bernoulli to Cross-Entropy",
+        "Why cross-entropy is the natural loss for classification"
+    )
+
+    # Show Bernoulli distribution
+    print("""
+================================================================================
+                        THE BERNOULLI DISTRIBUTION
+================================================================================
+
+For binary outcome y in {0, 1} with probability p:
+
+    P(y=1 | p) = p
+    P(y=0 | p) = 1 - p
+
+Combined in one formula:
+    P(y | p) = p^y * (1-p)^(1-y)
+
+This works because:
+    - If y=1: p^1 * (1-p)^0 = p       ✓
+    - If y=0: p^0 * (1-p)^1 = 1-p     ✓
+""")
+
+    # Visualize Bernoulli for different p values
+    fig, axes = plt.subplots(1, 3, figsize=(12, 3))
+    for i, p in enumerate([0.2, 0.5, 0.8]):
+        axes[i].bar([0, 1], [1-p, p], color=["steelblue", "orange"], edgecolor="black")
+        axes[i].set_title(f"Bernoulli(p={p})", fontsize=12)
+        axes[i].set_xlabel("Outcome (y)")
+        axes[i].set_ylabel("Probability")
+        axes[i].set_xticks([0, 1])
+        axes[i].set_ylim(0, 1)
+    plt.tight_layout()
+    plt.show()
+
+    # Mathematical derivation
+    print("\n--- Mathematical Derivation ---")
+    derivation = derive_crossentropy_from_bernoulli_mle(show_steps=True)
+    print(derivation)
+
+    # Why Bernoulli?
+    print("\n--- Why Bernoulli? ---")
+    reasoning = why_bernoulli_distribution(show_reasoning=True)
+    print(reasoning)
+
+    # Generate classification data
+    print("\n--- Empirical Demonstration ---")
+    X, y = generate_imbalanced_classification_data(
+        n_samples=n_samples,
+        imbalance_ratio=0.4,  # Fairly balanced for this demo
+        class_separation=1.5,
+        random_state=random_state,
+    )
+
+    # Fit logistic regression
+    model = LogisticRegression(random_state=random_state, max_iter=1000)
+    model.fit(X, y)
+    y_pred_proba = model.predict_proba(X)[:, 1]
+
+    # Show MLE visualization
+    print("Visualizing the MLE process for classification...")
+    fig = plot_bernoulli_mle_visual(y, y_pred_proba)
+    plt.show()
+
+    # Show loss function shapes
+    print("\n--- Cross-Entropy Loss Curves ---")
+    fig = plot_cross_entropy_loss_surface()
+    plt.show()
+
+    # Calibration check
+    print("\n--- Probability Calibration (The 'Residual Check' for Classification) ---")
+    calibration_curve, brier_score, fig = demonstrate_probability_calibration(
+        y, y_pred_proba, n_bins=10, show_plot=True
+    )
+    plt.show()
+
+    print_key_insight("""
+KEY TAKEAWAY:
+
+    Cross-Entropy = Negative Log-Likelihood of Bernoulli Distribution
+
+Just like:
+    - MSE = Negative log-likelihood of Gaussian
+    - MAE = Negative log-likelihood of Laplace
+
+THE PATTERN:
+    1. Choose distribution assumption for y|x
+    2. Write likelihood function
+    3. Take negative log-likelihood
+    4. That IS your loss function!
+
+For classification:
+    Bernoulli assumption  -->  Cross-Entropy loss
+
+CALIBRATION IS THE RESIDUAL CHECK:
+    - Good calibration = Bernoulli assumption is correct
+    - Poor calibration = Consider other distributions (probit, cloglog)
+    - Or recalibrate with Platt scaling / isotonic regression
+""")
+
+
+def demonstration_10_alternative_classification_losses(
+    n_samples: int = 500,
+    random_state: int = 42,
+) -> None:
+    """
+    SECTION 2.3: When Bernoulli is wrong - Alternatives.
+
+    Parameters
+    ----------
+    n_samples : int
+        Sample size
+    random_state : int
+        Random seed
+
+    Notes
+    -----
+    Quick overview - not deep dive.
+    Message: Bernoulli is standard and works 90% of the time.
+    But knowing alternatives exist is important for edge cases.
+    """
+    from theory import compare_classification_distributions, explain_cross_entropy_properties
+
+    print_section_header(
+        2.3,
+        "Alternative Classification Distributions",
+        "When Bernoulli might not be the best choice"
+    )
+
+    # Compare distributions
+    comparison = compare_classification_distributions()
+    print(comparison)
+
+    # Explain cross-entropy properties
+    print("\n--- Cross-Entropy Properties ---")
+    properties = explain_cross_entropy_properties()
+    print(properties)
+
+    # Visual comparison of link functions
+    print("\n--- Link Functions Comparison ---")
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    z = np.linspace(-5, 5, 200)
+
+    # Logistic (sigmoid)
+    logistic = 1 / (1 + np.exp(-z))
+
+    # Probit (Gaussian CDF)
+    from scipy import stats
+    probit = stats.norm.cdf(z)
+
+    # Complementary log-log
+    cloglog = 1 - np.exp(-np.exp(z))
+
+    ax.plot(z, logistic, "b-", linewidth=2, label="Logistic (sigmoid)")
+    ax.plot(z, probit, "g--", linewidth=2, label="Probit (Gaussian CDF)")
+    ax.plot(z, cloglog, "r:", linewidth=2, label="Complementary log-log")
+    ax.axhline(0.5, color="gray", linestyle="--", alpha=0.5)
+    ax.axvline(0, color="gray", linestyle="--", alpha=0.5)
+
+    ax.set_xlabel("Linear Predictor (z = w^T x)", fontsize=12)
+    ax.set_ylabel("Probability", fontsize=12)
+    ax.set_title("Link Functions: Converting Linear Predictor to Probability", fontsize=14)
+    ax.legend(loc="lower right")
+    ax.grid(True, alpha=0.3)
+    ax.set_xlim(-5, 5)
+    ax.set_ylim(-0.05, 1.05)
+
+    ax.text(
+        0.02, 0.98,
+        "All three are similar in the middle.\nDifferences are in the tails.\nLogistic is most common.",
+        transform=ax.transAxes,
+        verticalalignment="top",
+        fontsize=10,
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+    )
+
+    plt.tight_layout()
+    plt.show()
+
+    print_key_insight("""
+PRACTICAL ADVICE:
+
+1. START with Bernoulli (logistic regression, cross-entropy)
+   - Works 90%+ of the time
+   - Well understood, fast, stable
+
+2. CHECK calibration with reliability diagram
+   - Points on diagonal = good calibration
+   - Systematic deviation = consider alternatives
+
+3. ALTERNATIVES for special cases:
+   - Probit: When you believe there's a latent Gaussian variable
+   - Cloglog: For rare events (asymmetric)
+   - Beta-Binomial: For overdispersed data
+
+4. NON-PROBABILISTIC option:
+   - Hinge loss (SVM): When you only care about decision boundary
+   - No calibrated probabilities, but maximum margin
+
+For most problems, just use cross-entropy and you'll be fine!
+""")
+
+
+def demonstration_11_imbalance_and_metrics(
+    n_samples: int = 1000,
+    imbalance_ratio: float = 0.05,
+    random_state: int = 42,
+) -> None:
+    """
+    SECTION 2.4: Class imbalance, MLE bias, and metric sensitivity.
+
+    This is the PAYOFF - connects everything together.
+
+    Parameters
+    ----------
+    n_samples : int
+        Number of samples
+    imbalance_ratio : float
+        Fraction in minority class
+    random_state : int
+        Random seed
+
+    Notes
+    -----
+    Brings together:
+    - MLE theory (why imbalance biases it)
+    - Residual thinking (how it shows up)
+    - Metric understanding (which break and why)
+    - Solution (weighted loss)
+    """
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import (
+        accuracy_score, precision_score, recall_score, f1_score,
+        roc_auc_score, average_precision_score,
+    )
+
+    from visualization import (
+        plot_metric_sensitivity_to_imbalance,
+        plot_weighted_vs_unweighted_crossentropy,
+        plot_classification_residuals,
+    )
+
+    print_section_header(
+        2.4,
+        "Class Imbalance and MLE Bias",
+        "How majority class dominates loss function and breaks metrics"
+    )
+
+    # Generate imbalanced data
+    print(f"\nGenerating data: {imbalance_ratio:.1%} minority class")
+    X, y = generate_imbalanced_classification_data(
+        n_samples=n_samples,
+        imbalance_ratio=imbalance_ratio,
+        class_separation=1.5,
+        random_state=random_state,
+    )
+
+    n_minority = int(y.sum())
+    n_majority = len(y) - n_minority
+    print(f"Class distribution: {n_majority} negative (Class 0), {n_minority} positive (Class 1)")
+    print(f"Ratio: {n_majority/n_minority:.1f}:1")
+
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=random_state, stratify=y
+    )
+
+    # Train unweighted model
+    print("\n" + "="*70)
+    print("1. UNWEIGHTED MODEL (Standard MLE)")
+    print("="*70)
+    model_unweighted = LogisticRegression(random_state=random_state, max_iter=1000)
+    model_unweighted.fit(X_train, y_train)
+    y_pred_proba_unweighted = model_unweighted.predict_proba(X_test)[:, 1]
+    y_pred_unweighted = model_unweighted.predict(X_test)
+
+    print(f"Mean predicted probability: {y_pred_proba_unweighted.mean():.3f}")
+    print(f"True minority rate in test: {y_test.mean():.3f}")
+    print("→ Model is conservative (predicts lower probabilities)")
+
+    # Train weighted model
+    print("\n" + "="*70)
+    print("2. WEIGHTED MODEL (Balanced MLE)")
+    print("="*70)
+    model_weighted = LogisticRegression(
+        class_weight="balanced", random_state=random_state, max_iter=1000
+    )
+    model_weighted.fit(X_train, y_train)
+    y_pred_proba_weighted = model_weighted.predict_proba(X_test)[:, 1]
+    y_pred_weighted = model_weighted.predict(X_test)
+
+    print(f"Mean predicted probability: {y_pred_proba_weighted.mean():.3f}")
+    print("→ Model predictions closer to true rate")
+
+    # Compare residuals
+    print("\n" + "="*70)
+    print("3. RESIDUAL ANALYSIS")
+    print("="*70)
+
+    fig = plot_weighted_vs_unweighted_crossentropy(
+        y_test, y_pred_proba_unweighted, y_pred_proba_weighted
+    )
+    plt.suptitle("Unweighted vs Weighted Cross-Entropy", fontsize=14)
+    plt.show()
+
+    # Metrics comparison
+    print("\n" + "="*70)
+    print("4. METRIC COMPARISON")
+    print("="*70)
+
+    def calc_metrics(y_true, y_pred, y_proba):
+        return {
+            "Accuracy": accuracy_score(y_true, y_pred),
+            "Precision": precision_score(y_true, y_pred, zero_division=0),
+            "Recall": recall_score(y_true, y_pred, zero_division=0),
+            "F1": f1_score(y_true, y_pred, zero_division=0),
+            "AUC-ROC": roc_auc_score(y_true, y_proba) if len(np.unique(y_true)) > 1 else 0,
+            "Avg Precision": average_precision_score(y_true, y_proba) if len(np.unique(y_true)) > 1 else 0,
+        }
+
+    metrics_unw = calc_metrics(y_test, y_pred_unweighted, y_pred_proba_unweighted)
+    metrics_w = calc_metrics(y_test, y_pred_weighted, y_pred_proba_weighted)
+
+    print("\n{:<15} {:>12} {:>12}".format("Metric", "Unweighted", "Weighted"))
+    print("-" * 42)
+    for metric in metrics_unw:
+        print("{:<15} {:>12.3f} {:>12.3f}".format(
+            metric, metrics_unw[metric], metrics_w[metric]
+        ))
+
+    # Explain metric sensitivity
+    print("""
+WHY METRICS RESPOND DIFFERENTLY:
+────────────────────────────────────────────────────────────────────────
+
+ACCURACY = (TP + TN) / Total
+    • Dominated by TN from majority class
+    • Unweighted: High accuracy from predicting all negative
+    • Weighted: Lower accuracy, but more honest
+    • IMBALANCE SENSITIVE ⚠️
+
+PRECISION = TP / (TP + FP)
+    • FP comes from majority class
+    • Small FP rate × large majority = many FPs
+    • Affected even if minority recall is good
+    • MODERATELY SENSITIVE ⚠️
+
+RECALL = TP / (TP + FN)
+    • Only looks at minority class (TP + FN)
+    • Denominator doesn't include majority at all
+    • Unaffected by class proportions
+    • NOT SENSITIVE ✓
+
+AUC-ROC = Area under (TPR vs FPR) curve
+    • TPR = TP/(TP+FN) - minority only
+    • FPR = FP/(FP+TN) - normalized by majority
+    • Both rates scale-invariant
+    • NOT SENSITIVE ✓
+""")
+
+    # Show metric sensitivity across imbalance ratios
+    print("\n--- Metric Sensitivity Visualization ---")
+    fig = plot_metric_sensitivity_to_imbalance(
+        imbalance_ratios=[0.5, 0.3, 0.1, 0.05, 0.02, 0.01]
+    )
+    plt.show()
+
+    # The MLE connection
+    print("""
+================================================================================
+                         THE MLE CONNECTION
+================================================================================
+
+Cross-entropy loss: L = -Σ[yᵢ·log(pᵢ) + (1-yᵢ)·log(1-pᵢ)]
+
+With imbalance (95% negative):
+    • 950 negative samples contribute: -Σlog(1-pᵢ)
+    • 50 positive samples contribute:  -Σlog(pᵢ)
+
+Gradient: ∂L/∂θ ∝ 950·E[grad|negative] + 50·E[grad|positive]
+
+→ Model is 19× more concerned about negatives!
+→ Learns to be conservative (low pᵢ) to avoid hurting majority
+→ Minority class gets large residuals (y=1, p̂=0.1 → residual=0.9)
+
+WEIGHTED LOSS FIX:
+
+L = -Σ[w₁·yᵢ·log(pᵢ) + w₀·(1-yᵢ)·log(1-pᵢ)]
+
+Set w₁ = 950/50 = 19, w₀ = 1:
+    • Now both classes contribute equally to loss
+    • MLE treats them with equal importance
+    • Better recall, more balanced predictions
+""")
+
+    print_key_insight(f"""
+SUMMARY:
+
+Unweighted model:
+    • Accuracy: {metrics_unw['Accuracy']:.3f} (looks great, but misleading!)
+    • Recall:   {metrics_unw['Recall']:.3f} (terrible for minority class)
+
+Weighted model:
+    • Accuracy: {metrics_w['Accuracy']:.3f} (lower, but more honest)
+    • Recall:   {metrics_w['Recall']:.3f} (much better!)
+
+RULE OF THUMB:
+    • If you care about minority class → weight your loss
+    • If accuracy is high but recall is low → you have a problem
+    • Prefer metrics insensitive to imbalance: Recall, AUC-ROC, Avg Precision
+""")
+
+
 def demonstration_summary() -> None:
     """
     Print summary of all key takeaways.
     """
-    print_section_header(6, "Key Takeaways", "What to remember")
+    print_section_header("Final", "Key Takeaways", "What to remember")
 
     print("""
 ================================================================================
                               MAIN POINTS
 ================================================================================
 
+PART 1: REGRESSION
+────────────────────────────────────────────────────────────────────────────────
+
 1. THREE DISTRIBUTIONS:
    - Input data: X has some distribution
    - Model: Learns FUNCTION f(X) -> y, not a distribution
    - Residuals: y - f(X) has distribution (this is what loss assumes!)
 
-2. LOSS = NEGATIVE LOG-LIKELIHOOD:
+2. LOSS = NEGATIVE LOG-LIKELIHOOD (Regression):
    - Gaussian noise -> MSE -> Optimizes for mean
    - Laplace noise  -> MAE -> Optimizes for median
    - Choosing loss = choosing residual distribution assumption
 
-3. CHECK YOUR RESIDUALS:
+3. CHECK YOUR RESIDUALS (Regression):
    - Random, no patterns -> Good fit
    - Patterns -> Model bias (wrong architecture)
    - Wrong distribution -> Wrong loss function
 
-4. IMBALANCE:
-   - Standard MLE biased toward majority class
-   - Solution: Weight loss function
-   - Don't trust accuracy alone!
+PART 2: CLASSIFICATION
+────────────────────────────────────────────────────────────────────────────────
 
-5. PRACTICAL WORKFLOW:
-   a. Think about noise distribution (domain knowledge)
-   b. Choose appropriate loss function
-   c. Train model
-   d. Check residuals (patterns? distribution match?)
-   e. Iterate if needed
+4. THE SAME PATTERN APPLIES:
+   - Bernoulli distribution -> Cross-entropy loss
+   - The likelihood framework is universal!
+
+5. CALIBRATION IS THE RESIDUAL CHECK:
+   - Points on diagonal in reliability diagram = good calibration
+   - Deviation = Bernoulli assumption may be wrong
+   - Or need to recalibrate (Platt scaling, isotonic regression)
+
+6. CLASS IMBALANCE AND METRICS:
+   - Standard MLE biased toward majority class
+   - Majority dominates the loss function
+
+   SENSITIVE metrics (be careful):
+   • Accuracy - dominated by majority class TN
+   • Precision - FP comes from majority
+
+   NOT SENSITIVE metrics (preferred):
+   • Recall - only looks at minority class
+   • AUC-ROC - normalized rates, scale-invariant
+   • Average Precision - focuses on positive class
+
+   Solution: Weight the loss function!
+
+================================================================================
+                         THE COMPLETE PATTERN
+================================================================================
+
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │  1. Choose distributional assumption for y|x                        │
+    │  2. Write likelihood function                                       │
+    │  3. Take negative log-likelihood                                    │
+    │  4. That IS your loss function                                      │
+    │  5. MLE = minimizing this loss                                      │
+    └─────────────────────────────────────────────────────────────────────┘
+
+    REGRESSION:                         CLASSIFICATION:
+    ────────────                        ────────────────
+    Gaussian -> MSE -> Mean             Bernoulli -> Cross-Entropy
+    Laplace  -> MAE -> Median           Probit    -> Probit NLL
+    Student-t -> Robust loss            Cloglog   -> Cloglog NLL
 
 ================================================================================
                     GO FORTH AND CHECK YOUR RESIDUALS!
+                    (Or calibration curves for classification)
 ================================================================================
 """)
 
     print("""
 ANTICIPATED QUESTIONS:
+
+REGRESSION:
+────────────────────────────────────────────────────────────────────────────────
 
 Q: "How do I know which loss to use?"
 A: Start with domain knowledge about noise. If unsure, try multiple
@@ -683,19 +1184,44 @@ A: Start with domain knowledge about noise. If unsure, try multiple
 Q: "Can I use different loss for different samples?"
 A: Yes! Sample weighting is exactly this. Important for imbalanced data.
 
+Q: "What if neither Gaussian nor Laplace fits?"
+A: Try Huber (hybrid), or custom loss.
+   XGBoost supports many: Gamma, Tweedie, quantile.
+
+CLASSIFICATION:
+────────────────────────────────────────────────────────────────────────────────
+
+Q: "Why cross-entropy and not MSE for classification?"
+A: MSE has vanishing gradients near 0 and 1. Cross-entropy penalizes
+   confident wrong predictions heavily. Plus, it's proper MLE under Bernoulli!
+
+Q: "My model has high accuracy but low recall. What's wrong?"
+A: Class imbalance! Your model learned to predict majority class.
+   Solution: Use weighted loss or oversample minority.
+
+Q: "Which metrics should I use for imbalanced data?"
+A: Prefer metrics NOT sensitive to imbalance:
+   - Recall (sensitivity)
+   - AUC-ROC
+   - Average Precision (AUC-PR)
+   Avoid raw accuracy!
+
+Q: "How do I know if my probabilities are calibrated?"
+A: Plot a reliability diagram. Points on diagonal = calibrated.
+   This is the "residual check" for classification.
+
+GENERAL:
+────────────────────────────────────────────────────────────────────────────────
+
 Q: "What about neural networks?"
 A: Same principles! Any differentiable loss works.
    Common: MSE, MAE, cross-entropy, focal loss.
 
 Q: "Does this apply to deep learning?"
 A: Absolutely. Loss function is loss function, regardless of model
-   complexity.
+   complexity. The MLE framework is universal.
 
 Q: "How do I check if my residuals match assumed distribution?"
 A: Q-Q plot, Shapiro-Wilk test, histogram + overlay.
    But patterns are more important than perfect match.
-
-Q: "What if neither Gaussian nor Laplace fits?"
-A: Try Huber (hybrid), or custom loss.
-   XGBoost supports many: Gamma, Tweedie, quantile.
 """)
