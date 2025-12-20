@@ -1091,6 +1091,530 @@ RULE OF THUMB:
 """)
 
 
+# =============================================================================
+# PART 1.5: REGULARIZATION AND BIAS-VARIANCE DEMONSTRATIONS
+# =============================================================================
+
+
+def demonstration_12_regularization_as_map(
+    n_samples: int = 200,
+    n_features: int = 10,
+    random_state: int = 42,
+) -> None:
+    """
+    SECTION 1.5.1: Regularization as Maximum A Posteriori (MAP) estimation.
+
+    Shows that:
+    - Ridge regression = MLE with Gaussian prior on coefficients (L2)
+    - Lasso regression = MLE with Laplace prior on coefficients (L1)
+
+    Parameters
+    ----------
+    n_samples : int
+        Number of samples
+    n_features : int
+        Number of features
+    random_state : int
+        Random seed
+
+    Notes
+    -----
+    This is the Bayesian interpretation of regularization.
+    Key insight: regularization is not arbitrary - it's prior belief!
+    """
+    from sklearn.linear_model import LinearRegression, Ridge, Lasso
+    from sklearn.preprocessing import StandardScaler
+
+    from theory import derive_ridge_from_map, derive_lasso_from_map
+    from visualization import (
+        plot_regularization_path,
+        plot_regularization_as_prior,
+        plot_residuals_with_without_regularization,
+    )
+
+    print_section_header(
+        1.5,
+        "Regularization as MAP Estimation",
+        "Ridge = Gaussian prior, Lasso = Laplace prior"
+    )
+
+    # Mathematical derivation - Ridge
+    print("\n" + "="*70)
+    print("RIDGE REGRESSION: MLE + GAUSSIAN PRIOR")
+    print("="*70)
+    derivation_ridge = derive_ridge_from_map(show_steps=True)
+    print(derivation_ridge)
+
+    # Mathematical derivation - Lasso
+    print("\n" + "="*70)
+    print("LASSO REGRESSION: MLE + LAPLACE PRIOR")
+    print("="*70)
+    derivation_lasso = derive_lasso_from_map(show_steps=True)
+    print(derivation_lasso)
+
+    # Visualize priors
+    print("\n--- Prior Distributions on Coefficients ---")
+    fig = plot_regularization_as_prior()
+    plt.show()
+
+    # Generate data
+    print("\n--- Empirical Demonstration ---")
+    rng = np.random.default_rng(random_state)
+
+    # Create some correlated features
+    X = rng.normal(0, 1, (n_samples, n_features))
+    # True coefficients - some large, some small
+    true_coefs = np.array([3.0, -2.0, 1.5, 0, 0, 0, 0.5, 0, -0.3, 0])
+    y = X @ true_coefs + rng.normal(0, 1, n_samples)
+
+    # Standardize
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Show regularization paths
+    print("\n--- Ridge Regularization Path ---")
+    fig = plot_regularization_path(X_scaled, y, regularization_type="ridge")
+    plt.show()
+
+    print("\n--- Lasso Regularization Path ---")
+    fig = plot_regularization_path(X_scaled, y, regularization_type="lasso")
+    plt.show()
+
+    # Compare residuals
+    print("\n--- Residual Comparison: OLS vs Ridge ---")
+    fig = plot_residuals_with_without_regularization(X_scaled, y, alpha=1.0)
+    plt.show()
+
+    # Fit models and compare coefficients
+    print("\n--- Coefficient Comparison ---")
+    ols = LinearRegression().fit(X_scaled, y)
+    ridge = Ridge(alpha=1.0).fit(X_scaled, y)
+    lasso = Lasso(alpha=0.1).fit(X_scaled, y)
+
+    print("\n{:<10} {:>10} {:>10} {:>10} {:>10}".format(
+        "Coef", "True", "OLS", "Ridge", "Lasso"
+    ))
+    print("-" * 52)
+    for i in range(n_features):
+        print("{:<10} {:>10.3f} {:>10.3f} {:>10.3f} {:>10.3f}".format(
+            f"β_{i}",
+            true_coefs[i],
+            ols.coef_[i],
+            ridge.coef_[i],
+            lasso.coef_[i],
+        ))
+
+    print_key_insight("""
+KEY INSIGHT: REGULARIZATION = PRIOR BELIEF
+
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │  MLE (no regularization):                                          │
+    │      Maximize P(data | parameters)                                 │
+    │                                                                    │
+    │  MAP (with regularization):                                        │
+    │      Maximize P(data | parameters) × P(parameters)                 │
+    │                     ↑                      ↑                       │
+    │                Likelihood              Prior                       │
+    │                   (MLE)           (Regularization)                 │
+    └─────────────────────────────────────────────────────────────────────┘
+
+GAUSSIAN PRIOR (RIDGE):
+    • Prior: β ~ N(0, τ²)
+    • -log(prior) ∝ β²  →  L2 penalty
+    • Effect: ALL coefficients shrink toward 0
+    • Never exactly 0, just smaller
+
+LAPLACE PRIOR (LASSO):
+    • Prior: β ~ Laplace(0, b)
+    • -log(prior) ∝ |β|  →  L1 penalty
+    • Effect: SOME coefficients become exactly 0
+    • Sparsity! Automatic feature selection
+
+WHY THIS MATTERS:
+    • Regularization is not arbitrary
+    • It's your prior belief about coefficient magnitudes
+    • Gaussian prior = "I believe all coefficients are small"
+    • Laplace prior = "I believe most coefficients are zero"
+""")
+
+
+def demonstration_13_bias_variance_in_residuals(
+    n_samples: int = 300,
+    max_degree: int = 12,
+    random_state: int = 42,
+) -> None:
+    """
+    SECTION 1.5.2: Bias-variance tradeoff visualized through residuals.
+
+    Shows how model complexity affects:
+    - Training vs test error
+    - Residual patterns
+    - Bias and variance decomposition
+
+    Parameters
+    ----------
+    n_samples : int
+        Number of samples
+    max_degree : int
+        Maximum polynomial degree
+    random_state : int
+        Random seed
+
+    Notes
+    -----
+    The classic U-curve, but connected to residual analysis.
+    Shows that underfitting = systematic residuals (bias),
+    overfitting = noisy residuals with high variance.
+    """
+    from sklearn.preprocessing import PolynomialFeatures
+    from sklearn.linear_model import LinearRegression
+
+    from theory import (
+        bias_variance_decomposition_theorem,
+        regularization_effect_on_bias_variance,
+    )
+    from visualization import (
+        plot_bias_variance_with_model_complexity,
+        plot_learning_curves,
+    )
+
+    print_section_header(
+        1.52,
+        "Bias-Variance Tradeoff",
+        "The fundamental tradeoff in machine learning"
+    )
+
+    # Theorem
+    print("\n" + "="*70)
+    print("THE BIAS-VARIANCE DECOMPOSITION THEOREM")
+    print("="*70)
+    theorem = bias_variance_decomposition_theorem(show_proof=True)
+    print(theorem)
+
+    # Generate nonlinear data
+    print("\n--- Generating Nonlinear Data ---")
+    rng = np.random.default_rng(random_state)
+
+    X = np.linspace(-3, 3, n_samples).reshape(-1, 1)
+    # True function: sin wave
+    true_signal = np.sin(X.flatten()) + 0.5 * X.flatten()
+    noise = rng.normal(0, 0.5, n_samples)
+    y = true_signal + noise
+
+    # Train-test split
+    split_idx = int(0.7 * n_samples)
+    X_train, X_test = X[:split_idx], X[split_idx:]
+    y_train, y_test = y[:split_idx], y[split_idx:]
+
+    # Show bias-variance vs complexity
+    print("\n--- Bias-Variance vs Model Complexity ---")
+    fig = plot_bias_variance_with_model_complexity(
+        X_train, y_train, X_test, y_test, max_degree=max_degree
+    )
+    plt.show()
+
+    # Show learning curves for different complexities
+    print("\n--- Learning Curves: Low Complexity (Degree 1) ---")
+    from sklearn.pipeline import make_pipeline
+    model_low = make_pipeline(
+        PolynomialFeatures(1, include_bias=False),
+        LinearRegression()
+    )
+    fig = plot_learning_curves(X, y, model=model_low)
+    plt.suptitle("Low Complexity: High Bias", fontsize=14)
+    plt.show()
+
+    print("\n--- Learning Curves: High Complexity (Degree 10) ---")
+    model_high = make_pipeline(
+        PolynomialFeatures(10, include_bias=False),
+        LinearRegression()
+    )
+    fig = plot_learning_curves(X, y, model=model_high)
+    plt.suptitle("High Complexity: High Variance", fontsize=14)
+    plt.show()
+
+    # Show residual patterns at different complexities
+    print("\n--- Residual Patterns ---")
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+
+    for i, degree in enumerate([1, 3, 10]):
+        model = make_pipeline(
+            PolynomialFeatures(degree, include_bias=False),
+            LinearRegression()
+        )
+        model.fit(X_train, y_train)
+        y_pred_test = model.predict(X_test)
+        residuals = y_test - y_pred_test
+
+        axes[i].scatter(y_pred_test, residuals, alpha=0.5, s=30)
+        axes[i].axhline(0, color="red", linestyle="--")
+        axes[i].set_xlabel("Predicted", fontsize=10)
+        axes[i].set_ylabel("Residual", fontsize=10)
+
+        if degree == 1:
+            axes[i].set_title(f"Degree {degree}: HIGH BIAS\n(Systematic pattern)", fontsize=11)
+        elif degree == 10:
+            axes[i].set_title(f"Degree {degree}: HIGH VARIANCE\n(Noisy, unstable)", fontsize=11)
+        else:
+            axes[i].set_title(f"Degree {degree}: BALANCED\n(Random residuals)", fontsize=11)
+
+    plt.tight_layout()
+    plt.show()
+
+    # Regularization effect
+    print("\n" + "="*70)
+    print("REGULARIZATION'S EFFECT ON BIAS-VARIANCE")
+    print("="*70)
+    reg_effect = regularization_effect_on_bias_variance()
+    print(reg_effect)
+
+    print_key_insight("""
+KEY INSIGHT: RESIDUALS REVEAL BIAS AND VARIANCE
+
+UNDERFITTING (High Bias):
+    • Training error ≈ Test error (both high)
+    • Residuals show SYSTEMATIC PATTERN
+    • Model misses true structure
+    • Adding more data won't help!
+    • Solution: Increase complexity
+
+OVERFITTING (High Variance):
+    • Training error << Test error (gap)
+    • Training residuals small, test residuals large
+    • Model memorizes training noise
+    • More data might help
+    • Solution: Regularize or simplify
+
+THE U-CURVE:
+    • Sweet spot minimizes TEST error
+    • Not training error (that always decreases)
+    • Cross-validation finds this sweet spot
+
+LEARNING CURVES TELL THE STORY:
+    • Converging curves = Low variance (good generalization)
+    • Large gap = High variance (overfitting)
+    • Both curves plateau high = High bias (need more features)
+""")
+
+
+def demonstration_14_overfitting_detection(
+    n_samples: int = 500,
+    random_state: int = 42,
+) -> None:
+    """
+    SECTION 1.5.3: How to detect overfitting using residuals and learning curves.
+
+    Practical guide to diagnosing model problems.
+
+    Parameters
+    ----------
+    n_samples : int
+        Number of samples
+    random_state : int
+        Random seed
+
+    Notes
+    -----
+    Brings together all the diagnostic tools:
+    - Training vs test error gap
+    - Learning curves
+    - Residual analysis
+    - Regularization as solution
+    """
+    from sklearn.linear_model import Ridge
+    from sklearn.preprocessing import PolynomialFeatures
+    from sklearn.pipeline import make_pipeline
+
+    from theory import mse_vs_mae_bias_variance_tradeoff
+    from visualization import plot_learning_curves, plot_residuals_diagnostic
+
+    print_section_header(
+        1.53,
+        "Detecting and Fixing Overfitting",
+        "Practical diagnostics using residuals"
+    )
+
+    # Generate data
+    print("\n--- Generating Nonlinear Data ---")
+    rng = np.random.default_rng(random_state)
+
+    X = np.sort(rng.uniform(-3, 3, n_samples)).reshape(-1, 1)
+    true_signal = np.sin(1.5 * X.flatten()) + 0.3 * X.flatten() ** 2
+    noise = rng.normal(0, 0.5, n_samples)
+    y = true_signal + noise
+
+    # Split
+    split_idx = int(0.7 * n_samples)
+    X_train, X_test = X[:split_idx], X[split_idx:]
+    y_train, y_test = y[:split_idx], y[split_idx:]
+
+    # Train overfit model
+    print("\n" + "="*70)
+    print("STEP 1: DETECT OVERFITTING")
+    print("="*70)
+
+    degree = 15  # Intentionally too complex
+    model_overfit = make_pipeline(
+        PolynomialFeatures(degree, include_bias=False),
+        LinearRegression()
+    )
+    model_overfit.fit(X_train, y_train)
+
+    y_train_pred = model_overfit.predict(X_train)
+    y_test_pred = model_overfit.predict(X_test)
+
+    train_mse = np.mean((y_train - y_train_pred) ** 2)
+    test_mse = np.mean((y_test - y_test_pred) ** 2)
+
+    print(f"\nPolynomial Degree: {degree}")
+    print(f"Training MSE: {train_mse:.4f}")
+    print(f"Test MSE:     {test_mse:.4f}")
+    print(f"Gap:          {test_mse - train_mse:.4f}")
+    print("\n→ Large gap indicates OVERFITTING!")
+
+    # Show fit
+    print("\n--- Overfitting Model Fit ---")
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.scatter(X_train, y_train, alpha=0.3, s=20, label="Training data")
+    ax.scatter(X_test, y_test, alpha=0.3, s=20, color="red", label="Test data")
+
+    x_plot = np.linspace(-3, 3, 200).reshape(-1, 1)
+    y_plot = model_overfit.predict(x_plot)
+    ax.plot(x_plot, y_plot, "g-", linewidth=2, label=f"Degree {degree} fit")
+    ax.plot(x_plot, np.sin(1.5 * x_plot.flatten()) + 0.3 * x_plot.flatten() ** 2,
+            "k--", linewidth=2, label="True function")
+
+    ax.set_xlabel("X", fontsize=12)
+    ax.set_ylabel("y", fontsize=12)
+    ax.set_title("Overfitting: Model chases training noise", fontsize=14)
+    ax.legend()
+    ax.set_ylim(-3, 5)
+    plt.tight_layout()
+    plt.show()
+
+    # Learning curves
+    print("\n--- Learning Curves (Overfitting Detection) ---")
+    fig = plot_learning_curves(X, y, model=model_overfit)
+    plt.suptitle("Overfit Model: Large Gap Between Curves", fontsize=14)
+    plt.show()
+
+    # Residual analysis
+    print("\n--- Residual Diagnostics ---")
+    fig = plot_residuals_diagnostic(y_test, y_test_pred, "Overfit Model Residuals")
+    plt.show()
+
+    # Fix with regularization
+    print("\n" + "="*70)
+    print("STEP 2: FIX WITH REGULARIZATION")
+    print("="*70)
+
+    alphas = [0, 0.1, 1.0, 10.0, 100.0]
+    print("\n{:<10} {:>12} {:>12} {:>12}".format("Alpha", "Train MSE", "Test MSE", "Gap"))
+    print("-" * 48)
+
+    best_alpha = 0
+    best_test_mse = float("inf")
+
+    for alpha in alphas:
+        model = make_pipeline(
+            PolynomialFeatures(degree, include_bias=False),
+            Ridge(alpha=alpha)
+        )
+        model.fit(X_train, y_train)
+
+        train_pred = model.predict(X_train)
+        test_pred = model.predict(X_test)
+
+        train_mse = np.mean((y_train - train_pred) ** 2)
+        test_mse = np.mean((y_test - test_pred) ** 2)
+        gap = test_mse - train_mse
+
+        print("{:<10} {:>12.4f} {:>12.4f} {:>12.4f}".format(alpha, train_mse, test_mse, gap))
+
+        if test_mse < best_test_mse:
+            best_test_mse = test_mse
+            best_alpha = alpha
+
+    print(f"\nBest regularization: α = {best_alpha}")
+
+    # Show regularized fit
+    print("\n--- Regularized Model Fit ---")
+    model_regularized = make_pipeline(
+        PolynomialFeatures(degree, include_bias=False),
+        Ridge(alpha=best_alpha)
+    )
+    model_regularized.fit(X_train, y_train)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.scatter(X_train, y_train, alpha=0.3, s=20, label="Training data")
+    ax.scatter(X_test, y_test, alpha=0.3, s=20, color="red", label="Test data")
+
+    y_plot_reg = model_regularized.predict(x_plot)
+    ax.plot(x_plot, y_plot, "g--", linewidth=1, alpha=0.5, label=f"Unregularized")
+    ax.plot(x_plot, y_plot_reg, "b-", linewidth=2, label=f"Ridge (α={best_alpha})")
+    ax.plot(x_plot, np.sin(1.5 * x_plot.flatten()) + 0.3 * x_plot.flatten() ** 2,
+            "k--", linewidth=2, label="True function")
+
+    ax.set_xlabel("X", fontsize=12)
+    ax.set_ylabel("y", fontsize=12)
+    ax.set_title("Regularization Reduces Overfitting", fontsize=14)
+    ax.legend()
+    ax.set_ylim(-3, 5)
+    plt.tight_layout()
+    plt.show()
+
+    # Show learning curves for regularized model
+    print("\n--- Learning Curves (After Regularization) ---")
+    fig = plot_learning_curves(X, y, model=model_regularized)
+    plt.suptitle("Regularized Model: Curves Converge", fontsize=14)
+    plt.show()
+
+    # Loss function perspective
+    print("\n" + "="*70)
+    print("MSE vs MAE: BIAS-VARIANCE IMPLICATIONS")
+    print("="*70)
+    mse_mae_comparison = mse_vs_mae_bias_variance_tradeoff()
+    print(mse_mae_comparison)
+
+    print_key_insight("""
+OVERFITTING DETECTION CHECKLIST:
+
+1. TRAIN-TEST GAP
+   • Large gap = overfitting
+   • Train MSE << Test MSE
+   • Gap should be small relative to test error
+
+2. LEARNING CURVES
+   • Overfitting: Large gap, validation plateaus while training drops
+   • Underfitting: Both curves plateau at high error
+   • Good fit: Both curves converge to low error
+
+3. RESIDUAL PATTERNS
+   • Overfitting: Training residuals tiny, test residuals large
+   • Underfitting: Both residuals show systematic patterns
+   • Good fit: Random residuals, similar distributions
+
+SOLUTIONS:
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  Problem         │  Diagnosis           │  Solution                │
+├─────────────────────────────────────────────────────────────────────┤
+│  Overfitting     │  Large train-test    │  • Regularization (L1/L2)│
+│                  │  gap                 │  • More data             │
+│                  │                      │  • Simpler model         │
+│                  │                      │  • Dropout (neural nets) │
+├─────────────────────────────────────────────────────────────────────┤
+│  Underfitting    │  Both errors high,   │  • More features         │
+│                  │  systematic pattern  │  • More complex model    │
+│                  │  in residuals        │  • Less regularization   │
+└─────────────────────────────────────────────────────────────────────┘
+
+THE GOLDEN RULE:
+    Always check BOTH training AND test error.
+    Only test error tells you how well you'll generalize!
+""")
+
+
 def demonstration_summary() -> None:
     """
     Print summary of all key takeaways.
@@ -1120,19 +1644,41 @@ PART 1: REGRESSION
    - Patterns -> Model bias (wrong architecture)
    - Wrong distribution -> Wrong loss function
 
+PART 1.5: REGULARIZATION AND BIAS-VARIANCE
+────────────────────────────────────────────────────────────────────────────────
+
+4. REGULARIZATION = MAP ESTIMATION:
+   - MLE: Maximize P(data | parameters)
+   - MAP: Maximize P(data | params) × P(params)  [with prior]
+
+   - Gaussian prior → L2 penalty (Ridge) → shrinks all coefficients
+   - Laplace prior  → L1 penalty (Lasso) → makes coefficients exactly 0 (sparsity)
+
+5. BIAS-VARIANCE TRADEOFF:
+   - E[Error] = Bias² + Variance + Irreducible Noise
+   - Low complexity / high λ: High bias, low variance (underfitting)
+   - High complexity / low λ: Low bias, high variance (overfitting)
+   - Sweet spot: Minimum TEST error (use cross-validation)
+
+6. DETECTING OVERFITTING:
+   - Train-test gap: Large gap = overfitting
+   - Learning curves: Gap between curves = variance
+   - Residual patterns: Systematic = bias, random = good
+   - Solution: Regularization trades bias for variance
+
 PART 2: CLASSIFICATION
 ────────────────────────────────────────────────────────────────────────────────
 
-4. THE SAME PATTERN APPLIES:
+7. THE SAME PATTERN APPLIES:
    - Bernoulli distribution -> Cross-entropy loss
    - The likelihood framework is universal!
 
-5. CALIBRATION IS THE RESIDUAL CHECK:
+8. CALIBRATION IS THE RESIDUAL CHECK:
    - Points on diagonal in reliability diagram = good calibration
    - Deviation = Bernoulli assumption may be wrong
    - Or need to recalibrate (Platt scaling, isotonic regression)
 
-6. CLASS IMBALANCE AND METRICS:
+9. CLASS IMBALANCE AND METRICS:
    - Standard MLE biased toward majority class
    - Majority dominates the loss function
 
@@ -1187,6 +1733,29 @@ A: Yes! Sample weighting is exactly this. Important for imbalanced data.
 Q: "What if neither Gaussian nor Laplace fits?"
 A: Try Huber (hybrid), or custom loss.
    XGBoost supports many: Gamma, Tweedie, quantile.
+
+REGULARIZATION:
+────────────────────────────────────────────────────────────────────────────────
+
+Q: "How do I choose the regularization strength (λ)?"
+A: Cross-validation! Use GridSearchCV or RidgeCV/LassoCV.
+   Plot CV error vs λ to find the sweet spot.
+
+Q: "Ridge or Lasso? Which one should I use?"
+A: Ridge: When all features are relevant (no sparsity expected)
+   Lasso: When many features are irrelevant (want feature selection)
+   Elastic Net: Compromise between the two
+
+Q: "How does regularization relate to bias-variance?"
+A: Regularization trades bias for variance!
+   - More regularization = more bias, less variance
+   - Less regularization = less bias, more variance
+   - Optimal λ minimizes total error (bias² + variance)
+
+Q: "My learning curves show a gap. What does this mean?"
+A: Large gap = high variance = overfitting
+   Solutions: More regularization, more data, or simpler model.
+   If both curves plateau high = high bias = need more features.
 
 CLASSIFICATION:
 ────────────────────────────────────────────────────────────────────────────────
