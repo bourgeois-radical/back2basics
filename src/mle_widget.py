@@ -222,7 +222,7 @@ def _build_figure(data, mu, sigma, feature_name, mle_mu, mle_sigma, height, widt
     )
     if width is not None:
         layout_kwargs['width'] = width
-    fig.update_layout(**layout_kwargs)
+    fig.update_layout(**layout_kwargs) # pyright: ignore[reportArgumentType]
 
     # Axis styling
     for row, col in [(1, 1), (2, 1), (2, 2)]:
@@ -237,7 +237,7 @@ def _build_figure(data, mu, sigma, feature_name, mle_mu, mle_sigma, height, widt
     fig.update_yaxes(title_text="ℓ(σ)", row=2, col=2)
 
     for ann in fig['layout']['annotations']:
-        ann['font'] = dict(size=12, color=COLORS['yellow'])
+        ann['font'] = dict(size=12, color=COLORS['yellow']) # pyright: ignore[reportIndexIssue]
 
     return fig
 
