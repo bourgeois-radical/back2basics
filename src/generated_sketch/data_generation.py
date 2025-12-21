@@ -1,4 +1,4 @@
-"""
+    """
 Data generation module for MLE and Loss Functions presentation.
 
 This module provides functions to generate synthetic datasets with known
