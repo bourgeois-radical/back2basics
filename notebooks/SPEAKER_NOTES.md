@@ -94,6 +94,48 @@ Density < 1 → log(density) < 0 → sum of negatives = negative
 
 *Note:* Deep learning uses **negative log-likelihood (NLL)** and *minimizes* it. Same math, different convention.
 
+### Why Negative? Why Minimize?
+
+**SAY: "Optimizers are built to minimize. Gradient descent goes downhill. So instead of maximizing log-likelihood, we flip the sign and minimize."**
+
+$$\text{NLL} = -\ell(\theta) = -\log L(\theta)$$
+
+| Approach | Sign | Goal | Value |
+|----------|------|------|-------|
+| Log-likelihood | negative (e.g., -150) | maximize | less negative = better |
+| **Negative** log-likelihood | positive (e.g., +150) | minimize | smaller = better |
+
+Mathematically identical. Just convention.
+
+### Classification: Cross-Entropy is NLL
+
+Yes, even simple classification uses NLL! Here's how:
+
+**Binary classification:** Assume $y \sim \text{Bernoulli}(p)$ where $p = \sigma(f(x))$ is your model's predicted probability.
+
+The Bernoulli PMF:
+$$P(y \mid p) = p^y (1-p)^{1-y}$$
+
+Take log:
+$$\log P(y \mid p) = y \log(p) + (1-y) \log(1-p)$$
+
+Flip sign (NLL):
+$$-\log P(y \mid p) = -y \log(p) - (1-y) \log(1-p)$$
+
+**SAY: "This is binary cross-entropy. It's just negative log-likelihood of a Bernoulli distribution."**
+
+For n samples, sum them up:
+$$\text{BCE} = -\frac{1}{n}\sum_{i=1}^{n} \left[ y_i \log(p_i) + (1-y_i) \log(1-p_i) \right]$$
+
+### Multi-class: Same idea
+
+For $K$ classes with one-hot labels and softmax outputs:
+$$\text{Cross-Entropy} = -\sum_{i=1}^{n} \sum_{k=1}^{K} y_{ik} \log(p_{ik})$$
+
+This is NLL of a **Categorical distribution** (generalization of Bernoulli to K outcomes).
+
+**SAY: "Every standard loss function is secretly MLE. Cross-entropy assumes Bernoulli/Categorical. MSE assumes Gaussian. MAE assumes Laplace. The loss function IS your distributional assumption."**
+
 ---
 
 ## What is Likelihood? (Density vs. Probability)
@@ -102,11 +144,22 @@ Density < 1 → log(density) < 0 → sum of negatives = negative
 
 **SAY: "How likely — or how plausible — are these parameters given what we observed?"**
 
-In statistics, "likely" ≠ "probable":
+In everyday English, "likely" and "probable" are synonyms. In statistics, they're different:
 - **Probability:** P(data | parameters) — fixed parameters, varying data
 - **Likelihood:** L(parameters | data) — fixed data, varying parameters
 
-Same formula, different interpretation.
+The formula $f(x \mid \theta)$ can be read two ways:
+
+| Interpretation | What's fixed? | What varies? | Question |
+|---------------|---------------|--------------|----------|
+| **Probability/Density** | parameters θ | data x | "Given θ, how dense is x?" |
+| **Likelihood** | data x | parameters θ | "Given x, how plausible is θ?" |
+
+**SAY: "Same formula, different question. We observed the data — it's fixed. Now we're asking: which parameters make that observation most plausible?"**
+
+Notation:
+- $f(x \mid \theta)$ — density of x given θ
+- $L(\theta) = f(x \mid \theta)$ — likelihood of θ (data x is implicit, it's what we observed)
 
 ### Density vs. Probability
 
